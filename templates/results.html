@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis Results - NutriVision AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    .result-card {
+        border-radius: 10px;
+        box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .food-image {
+        max-width: 100%;
+        border-radius: 10px;
+        box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    }
+    .confidence-bar {
+        height: 25px;
+        border-radius: 5px;
+    }
+    .macro-circle {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        font-weight: bold;
+        margin: 0 auto;
+    }
+    .eco-badge {
+        font-size: 48px;
+        font-weight: bold;
+    }
+    .low-confidence-warning {
+        background-color: #fff3cd;
+        border-left: 4px solid #ffc107;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header Start -->
+<div class="container-xxl py-5 bg-dark hero-header mb-5">
+    <div class="container text-center my-5 pt-5 pb-4">
+        <h1 class="display-3 text-white mb-3 animated slideInDown">Analysis Results</h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb justify-content-center text-uppercase">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('scan') }}">Scan</a></li>
+                <li class="breadcrumb-item text-white active" aria-current="page">Results</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+<!-- Page Header End -->
+
+<!-- Results Start -->
+<div class="container-xxl py-5">
+    <div class="container">
+
+        <!-- Demo Mode Indicator -->
+        {% if result.get('is_demo') %}
+        <div class="alert alert-info wow fadeInUp" data-wow-delay="0.05s">
+            <h5><i class="fa fa-info-circle text-info me-2"></i>Demo Mode</h5>
+            <p class="mb-0">You are viewing a demo analysis. This uses pre-loaded data without model inference.
+            {% if demo_foods %}
+            Try other demo foods:
+            {% for food in demo_foods %}
+                <a href="{{ url_for('demo', food=food) }}" class="badge bg-primary ms-1">{{ food.replace('_', ' ').title() }}</a>
+            {% endfor %}
+            {% endif %}
+            </p>
+        </div>
+        {% endif %}
+
+        <!-- Low Confidence Warning -->
+        {% if result.prediction.low_confidence_warning %}
+        <div class="low-confidence-warning wow fadeInUp" data-wow-delay="0.1s">
+            <h5><i class="fa fa-exclamation-triangle text-warning me-2"></i>Low Confidence Detection</h5>
+            <p class="mb-0">The AI is not very confident about this prediction ({{ "%.1f"|format(result.prediction.confidence * 100) }}%). 
+            You can manually correct it below if needed.</p>
+        </div>
+        {% endif %}
+
+        <div class="row g-4">
+            <!-- Left Column: Image & Prediction -->
+            <div class="col-lg-5">
+                <!-- Food Image -->
+                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.1s">
+                    <h4 class="mb-3"><i class="fa fa-image text-primary me-2"></i>Uploaded Image</h4>
+                    <img src="{{ url_for('static', filename='uploads/' + result.image_path) }}" 
+                         class="food-image" alt="Food Image">
+                </div>
+
+                <!-- Prediction Results -->
+                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.3s">
+                    <h4 class="mb-3"><i class="fa fa-brain text-primary me-2"></i>AI Prediction</h4>
+                    <h2 class="text-primary">{{ result.prediction.predicted_class.replace('_', ' ').title() }}</h2>
+                    
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Confidence:</strong> {{ "%.1f"|format(result.prediction.confidence * 100) }}%</label>
+                        <div class="progress">
+                            <div class="progress-bar bg-primary confidence-bar" role="progressbar" 
+                                 style="width: {{ result.prediction.confidence * 100 }}%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Top 3 Predictions -->
+                    <h6 class="mt-4">Top 3 Predictions:</h6>
+                    <ul class="list-group">
+                        {% for food, conf in result.prediction.all_predictions[:3] %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ food.replace('_', ' ').title() }}
+                            <span class="badge bg-primary rounded-pill">{{ "%.1f"|format(conf * 100) }}%</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+
+                    <!-- Manual Correction -->
+                    <div class="mt-4">
+                        <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#correctionModal">
+                            <i class="fa fa-edit me-2"></i>Correct Prediction
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Nutrition & Analysis -->
+            <div class="col-lg-7">
+                <!-- Nutrition Overview -->
+                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.2s">
+                    <h4 class="mb-4"><i class="fa fa-chart-pie text-primary me-2"></i>Nutrition Facts</h4>
+                    
+                    {% if result.nutrition.status == 'success' %}
+                    <div class="row text-center mb-4">
+                        <div class="col-md-3 col-6 mb-3">
+                            <div class="macro-circle bg-primary text-white">
+                                {{ result.nutrition.calories }}
+                            </div>
+                            <p class="mt-2 mb-0"><strong>Calories</strong></p>
+                            <small class="text-muted">kcal</small>
+                        </div>
+                        <div class="col-md-3 col-6 mb-3">
+                            <div class="macro-circle" style="background-color: #FEA116; color: white;">
+                                {{ result.nutrition.macros.protein }}
+                            </div>
+                            <p class="mt-2 mb-0"><strong>Protein</strong></p>
+                            <small class="text-muted">grams</small>
+                        </div>
+                        <div class="col-md-3 col-6 mb-3">
+                            <div class="macro-circle" style="background-color: #28a745; color: white;">
+                                {{ result.nutrition.macros.carbs }}
+                            </div>
+                            <p class="mt-2 mb-0"><strong>Carbs</strong></p>
+                            <small class="text-muted">grams</small>
+                        </div>
+                        <div class="col-md-3 col-6 mb-3">
+                            <div class="macro-circle" style="background-color: #dc3545; color: white;">
+                                {{ result.nutrition.macros.fats }}
+                            </div>
+                            <p class="mt-2 mb-0"><strong>Fats</strong></p>
+                            <small class="text-muted">grams</small>
+                        </div>
+                    </div>
+
+                    <!-- Portion Size Control -->
+                    <div class="mb-4">
+                        <label for="portionSlider" class="form-label">
+                            <strong>Adjust Portion:</strong> <span id="portionDisplay">{{ result.portion_multiplier }}x</span>
+                        </label>
+                        <input type="range" class="form-range" id="portionSlider" 
+                               min="0.5" max="3.0" step="0.1" value="{{ result.portion_multiplier }}">
+                    </div>
+
+                    <!-- Additional Nutrition -->
+                    <div class="row">
+                        <div class="col-6">
+                            <p><strong>Fiber:</strong> {{ result.nutrition.macros.fiber }}g</p>
+                        </div>
+                        <div class="col-6">
+                            <p><strong>Serving Size:</strong> {{ result.nutrition.serving_size }}</p>
+                        </div>
+                    </div>
+                    {% else %}
+                    <p class="text-muted">Nutrition data not available for this food item.</p>
+                    {% endif %}
+                </div>
+
+                <!-- Burn-off Activities -->
+                {% if result.nutrition.status == 'success' %}
+                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.4s">
+                    <h4 class="mb-3"><i class="fa fa-running text-primary me-2"></i>Burn-off Activities</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="text-center p-3 bg-light rounded">
+                                <i class="fa fa-3x fa-running text-primary mb-2"></i>
+                                <h3 class="text-primary">{{ result.nutrition.burn_off.run_mins }}</h3>
+                                <p class="mb-0">Minutes of Running</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-center p-3 bg-light rounded">
+                                <i class="fa fa-3x fa-spa text-primary mb-2"></i>
+                                <h3 class="text-primary">{{ result.nutrition.burn_off.yoga_rounds }}</h3>
+                                <p class="mb-0">Surya Namaskar Rounds</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Sustainability Score -->
+                {% if result.nutrition.status == 'success' %}
+                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.5s">
+                    <h4 class="mb-3"><i class="fa fa-leaf text-primary me-2"></i>Sustainability</h4>
+                    <div class="text-center">
+                        <div class="eco-badge text-success">{{ result.nutrition.eco_score }}/10</div>
+                        <p class="mb-2"><strong>Environmental Impact: {{ result.nutrition.sustainability }}</strong></p>
+                        <p class="text-muted">{{ result.ai_analysis.sustainability_explanation }}</p>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Cultural Context -->
+                {% if result.nutrition.status == 'success' %}
+                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.6s">
+                    <h4 class="mb-3"><i class="fa fa-globe text-primary me-2"></i>Cultural Context</h4>
+                    <p>{{ result.ai_analysis.cultural_explanation }}</p>
+                </div>
+                {% endif %}
+
+                <!-- Leftover Ideas -->
+                {% if result.nutrition.status == 'success' and result.ai_analysis.leftover_ideas %}
+                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.7s">
+                    <h4 class="mb-3"><i class="fa fa-lightbulb text-primary me-2"></i>Leftover Remix Ideas</h4>
+                    <ul class="list-group">
+                        {% for idea in result.ai_analysis.leftover_ideas %}
+                        <li class="list-group-item">
+                            <i class="fa fa-check-circle text-success me-2"></i>{{ idea }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <!-- Dietary Tags -->
+                {% if result.nutrition.status == 'success' and result.nutrition.dietary_tags %}
+                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.8s">
+                    <h4 class="mb-3"><i class="fa fa-tags text-primary me-2"></i>Dietary Information</h4>
+                    <div>
+                        {% for tag in result.nutrition.dietary_tags %}
+                        <span class="badge bg-primary me-2 mb-2">{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="text-center mt-5 wow fadeInUp" data-wow-delay="0.9s">
+            <a href="{{ url_for('scan') }}" class="btn btn-primary py-3 px-5 me-3">
+                <i class="fa fa-camera me-2"></i>Scan Another Food
+            </a>
+            <a href="{{ url_for('index') }}" class="btn btn-outline-primary py-3 px-5">
+                <i class="fa fa-home me-2"></i>Back to Home
+            </a>
+        </div>
+    </div>
+</div>
+<!-- Results End -->
+
+<!-- Correction Modal -->
+<div class="modal fade" id="correctionModal" tabindex="-1" aria-labelledby="correctionModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="correctionModalLabel">Correct Prediction</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>If the AI prediction is incorrect, select the correct food item:</p>
+                <select class="form-select" id="correctedFood">
+                    <option value="">-- Select Food --</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="submitCorrection">Submit Correction</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const portionSlider = document.getElementById('portionSlider');
+    const portionDisplay = document.getElementById('portionDisplay');
+    const correctedFoodSelect = document.getElementById('correctedFood');
+    const submitCorrectionBtn = document.getElementById('submitCorrection');
+
+    const currentFood = "{{ result.prediction.predicted_class }}";
+    const currentPortion = {{ result.portion_multiplier }};
+
+    // Load food list for correction dropdown
+    fetch('/api/food_list')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                data.foods.forEach(food => {
+                    const option = document.createElement('option');
+                    option.value = food.value;
+                    option.textContent = food.label;
+                    correctedFoodSelect.appendChild(option);
+                });
+            }
+        });
+
+    // Portion slider update
+    if (portionSlider) {
+        portionSlider.addEventListener('input', (e) => {
+            const newPortion = parseFloat(e.target.value);
+            portionDisplay.textContent = newPortion.toFixed(1) + 'x';
+
+            // Update nutrition data via API
+            fetch('/api/update_portion', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    food_name: currentFood,
+                    portion_multiplier: newPortion
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Reload page to show updated nutrition
+                    location.reload();
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    }
+
+    // Submit correction
+    if (submitCorrectionBtn) {
+        submitCorrectionBtn.addEventListener('click', () => {
+            const correctedFood = correctedFoodSelect.value;
+
+            if (!correctedFood) {
+                alert('Please select a food item');
+                return;
+            }
+
+            fetch('/api/correct_prediction', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    corrected_food: correctedFood,
+                    portion_multiplier: currentPortion
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Reload page to show corrected results
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while correcting the prediction');
+            });
+        });
+    }
+</script>
+{% endblock %}
+

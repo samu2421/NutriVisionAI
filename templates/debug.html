@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}Debug - NutriVision AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-card {
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .status-ok {
+        background-color: #d4edda;
+        border-left: 4px solid #28a745;
+    }
+    .status-warning {
+        background-color: #fff3cd;
+        border-left: 4px solid #ffc107;
+    }
+    .status-error {
+        background-color: #f8d7da;
+        border-left: 4px solid #dc3545;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header Start -->
+<div class="container-xxl py-5 bg-dark hero-header mb-5">
+    <div class="container text-center my-5 pt-5 pb-4">
+        <h1 class="display-3 text-white mb-3 animated slideInDown">System Debug</h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb justify-content-center text-uppercase">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="breadcrumb-item text-white active" aria-current="page">Debug</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+<!-- Page Header End -->
+
+<!-- Debug Info Start -->
+<div class="container-xxl py-5">
+    <div class="container">
+        <div class="text-center wow fadeInUp" data-wow-delay="0.1s">
+            <h5 class="section-title ff-secondary text-center text-primary fw-normal">System Status</h5>
+            <h1 class="mb-5">Component Health Check</h1>
+        </div>
+
+        <div class="row g-4">
+            <!-- Model Status -->
+            <div class="col-lg-6">
+                <div class="status-card {% if status.model_loaded %}status-ok{% else %}status-warning{% endif %} wow fadeInUp" data-wow-delay="0.1s">
+                    <h4>
+                        <i class="fa fa-brain me-2"></i>AI Model
+                        {% if status.model_loaded %}
+                        <span class="badge bg-success float-end">Loaded</span>
+                        {% else %}
+                        <span class="badge bg-warning float-end">Not Found</span>
+                        {% endif %}
+                    </h4>
+                    <p class="mb-0">
+                        {% if status.model_loaded %}
+                        ✓ EfficientNet-B1 model is loaded and ready for inference
+                        {% else %}
+                        ⚠️ Model not found. Please train the model first using: <code>python src/train.py</code>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
+            <!-- Food Data Status -->
+            <div class="col-lg-6">
+                <div class="status-card {% if status.food_data_loaded %}status-ok{% else %}status-error{% endif %} wow fadeInUp" data-wow-delay="0.2s">
+                    <h4>
+                        <i class="fa fa-database me-2"></i>Food Data
+                        {% if status.food_data_loaded %}
+                        <span class="badge bg-success float-end">Loaded</span>
+                        {% else %}
+                        <span class="badge bg-danger float-end">Error</span>
+                        {% endif %}
+                    </h4>
+                    <p class="mb-0">
+                        {% if status.food_data_loaded %}
+                        ✓ Food database loaded with {{ status.food_count }} food items
+                        {% else %}
+                        ✗ Failed to load food data from data/food_data.json
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
+            <!-- GenAI Status -->
+            <div class="col-lg-6">
+                <div class="status-card {% if status.genai_available %}status-ok{% else %}status-warning{% endif %} wow fadeInUp" data-wow-delay="0.3s">
+                    <h4>
+                        <i class="fa fa-robot me-2"></i>GenAI Service
+                        {% if status.genai_available %}
+                        <span class="badge bg-success float-end">Available</span>
+                        {% else %}
+                        <span class="badge bg-warning float-end">Not Available</span>
+                        {% endif %}
+                    </h4>
+                    <p class="mb-0">
+                        {% if status.genai_available %}
+                        ✓ GenAI API is configured and available
+                        {% else %}
+                        ⚠️ GenAI API not configured. Set GROQ_API_KEY or OPENAI_API_KEY in .env file
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
+            <!-- Upload Folder Status -->
+            <div class="col-lg-6">
+                <div class="status-card {% if status.upload_folder_exists %}status-ok{% else %}status-error{% endif %} wow fadeInUp" data-wow-delay="0.4s">
+                    <h4>
+                        <i class="fa fa-folder me-2"></i>Upload Folder
+                        {% if status.upload_folder_exists %}
+                        <span class="badge bg-success float-end">Ready</span>
+                        {% else %}
+                        <span class="badge bg-danger float-end">Missing</span>
+                        {% endif %}
+                    </h4>
+                    <p class="mb-0">
+                        {% if status.upload_folder_exists %}
+                        ✓ Upload folder exists at: {{ status.upload_folder }}
+                        {% else %}
+                        ✗ Upload folder not found at: {{ status.upload_folder }}
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Demo Mode -->
+        <div class="mt-5 wow fadeInUp" data-wow-delay="0.5s">
+            <div class="text-center">
+                <h4 class="mb-4">Demo Mode</h4>
+                <p class="text-muted">Test the system with a forced prediction (no model required)</p>
+                <button class="btn btn-primary py-3 px-5" data-bs-toggle="modal" data-bs-target="#demoModal">
+                    <i class="fa fa-play me-2"></i>Run Demo Prediction
+                </button>
+            </div>
+        </div>
+
+        <!-- System Info -->
+        <div class="mt-5 wow fadeInUp" data-wow-delay="0.6s">
+            <div class="bg-light rounded p-4">
+                <h4 class="mb-3">System Information</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Model Architecture:</strong> EfficientNet-B1</p>
+                        <p><strong>Food Classes:</strong> 18</p>
+                        <p><strong>Input Size:</strong> 224×224</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Framework:</strong> PyTorch + Flask</p>
+                        <p><strong>GenAI Provider:</strong> Groq (LLaMA-3.1-70b)</p>
+                        <p><strong>Max Upload Size:</strong> 16MB</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Debug Info End -->
+
+<!-- Demo Modal -->
+<div class="modal fade" id="demoModal" tabindex="-1" aria-labelledby="demoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="demoModalLabel">Demo Prediction</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Select a food item to simulate a prediction:</p>
+                <select class="form-select" id="demoFood">
+                    <option value="samosa">Samosa</option>
+                    <option value="idli">Idli</option>
+                    <option value="masala_dosa">Masala Dosa</option>
+                    <option value="chole_bhature">Chole Bhature</option>
+                    <option value="pav_bhaji">Pav Bhaji</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="runDemo">Run Demo</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const runDemoBtn = document.getElementById('runDemo');
+    const demoFoodSelect = document.getElementById('demoFood');
+
+    if (runDemoBtn) {
+        runDemoBtn.addEventListener('click', () => {
+            const demoFood = demoFoodSelect.value;
+            
+            fetch('/api/demo_predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    food_name: demoFood,
+                    portion_multiplier: 1.0
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('Demo prediction successful!\n\n' +
+                          'Food: ' + data.prediction.predicted_class + '\n' +
+                          'Calories: ' + data.nutrition.calories + ' kcal\n' +
+                          'Protein: ' + data.nutrition.macros.protein + 'g');
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred during demo prediction');
+            });
+        });
+    }
+</script>
+{% endblock %}
+
