@@ -34,10 +34,21 @@ class FoodPredictor:
         self.load_model()
     
     def _get_transform(self):
-        """Get inference transforms (no augmentation)"""
+        """
+        Get inference transforms following ImageNet standard preprocessing.
+
+        This uses the professional inference pipeline:
+        1. Resize shortest side to 256 (preserves aspect ratio)
+        2. Center crop to 224x224 (no distortion)
+        3. Normalize with ImageNet statistics
+
+        This prevents aspect ratio distortion that occurs when directly
+        resizing to 224x224, which is critical for real-world images.
+        """
         return A.Compose([
-            A.Resize(224, 224),
-            A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            A.SmallestMaxSize(max_size=256, interpolation=1),  # Resize shortest side to 256
+            A.CenterCrop(height=224, width=224),  # Center crop to 224x224
+            A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # ImageNet stats
             ToTensorV2()
         ])
     
@@ -102,57 +113,163 @@ class FoodPredictor:
         
         return image_tensor
     
-    def predict(self, image_path, return_top_k=3):
+    def predict(self, image_path, return_top_k=3, use_tta=True):
         """
-        Predict food class from image
-        
+        Predict food class from image with optional Test Time Augmentation (TTA)
+
         Args:
             image_path: Path to image file or PIL Image
             return_top_k: Number of top predictions to return
-            
+            use_tta: Whether to use Test Time Augmentation (default: True)
+
         Returns:
             dict with prediction results:
                 - predicted_class: Top predicted class name
                 - confidence: Confidence score (0-1)
                 - all_predictions: List of (class_name, confidence) tuples
                 - low_confidence_warning: Boolean flag if confidence < 0.6
+                - tta_used: Boolean flag indicating if TTA was used
+        """
+        if use_tta:
+            # Use Test Time Augmentation for better confidence
+            return self._predict_with_tta(image_path, return_top_k)
+        else:
+            # Single-pass inference (legacy mode)
+            return self._predict_single(image_path, return_top_k)
+
+    def _predict_single(self, image_path, return_top_k=3):
+        """
+        Single-pass prediction (no TTA)
+
+        Args:
+            image_path: Path to image file or PIL Image
+            return_top_k: Number of top predictions to return
+
+        Returns:
+            dict with prediction results
         """
         # Preprocess
         image_tensor = self.preprocess_image(image_path)
         image_tensor = image_tensor.to(self.device)
-        
+
         # Inference
         with torch.no_grad():
             outputs = self.model(image_tensor)
             probabilities = torch.nn.functional.softmax(outputs, dim=1)
-        
+
         # Get top predictions
         top_probs, top_indices = torch.topk(probabilities, k=min(return_top_k, len(self.class_names)))
-        
+
         # Convert to CPU and numpy
         top_probs = top_probs.cpu().numpy()[0]
         top_indices = top_indices.cpu().numpy()[0]
-        
+
         # Build results
         all_predictions = [
             (self.class_names[idx], float(prob))
             for idx, prob in zip(top_indices, top_probs)
         ]
-        
+
         predicted_class = all_predictions[0][0]
         confidence = all_predictions[0][1]
-        
+
         # Low confidence warning
         low_confidence_warning = confidence < 0.6
-        
+
         result = {
             'predicted_class': predicted_class,
             'confidence': confidence,
             'all_predictions': all_predictions,
             'low_confidence_warning': low_confidence_warning,
-            'confidence_threshold': 0.6
+            'confidence_threshold': 0.6,
+            'tta_used': False
         }
-        
+
+        return result
+
+    def _predict_with_tta(self, image_path, return_top_k=3):
+        """
+        Predict with Test Time Augmentation (TTA)
+
+        TTA reduces model uncertainty by averaging predictions across
+        multiple augmented versions of the input image:
+        1. Original image
+        2. Horizontally flipped image
+
+        The logits (pre-softmax outputs) are averaged, then softmax is applied.
+        This is more stable than averaging probabilities.
+
+        Args:
+            image_path: Path to image file or PIL Image
+            return_top_k: Number of top predictions to return
+
+        Returns:
+            dict with prediction results
+        """
+        # Load and preprocess original image
+        if isinstance(image_path, str) or isinstance(image_path, Path):
+            image = Image.open(image_path).convert('RGB')
+        elif isinstance(image_path, Image.Image):
+            image = image_path.convert('RGB')
+        else:
+            raise ValueError("image_path must be a file path or PIL Image")
+
+        # Convert to numpy for augmentation
+        image_np = np.array(image)
+
+        # Create augmented versions
+        augmented_images = [
+            image_np,  # Original
+            np.fliplr(image_np)  # Horizontal flip
+        ]
+
+        # Collect logits from all augmentations
+        logits_list = []
+
+        with torch.no_grad():
+            for aug_image in augmented_images:
+                # Apply transforms
+                transformed = self.transform(image=aug_image)
+                image_tensor = transformed['image'].unsqueeze(0).to(self.device)
+
+                # Get logits (pre-softmax)
+                logits = self.model(image_tensor)
+                logits_list.append(logits)
+
+        # Average logits (more stable than averaging probabilities)
+        avg_logits = torch.mean(torch.stack(logits_list), dim=0)
+
+        # Apply softmax to averaged logits
+        probabilities = torch.nn.functional.softmax(avg_logits, dim=1)
+
+        # Get top predictions
+        top_probs, top_indices = torch.topk(probabilities, k=min(return_top_k, len(self.class_names)))
+
+        # Convert to CPU and numpy
+        top_probs = top_probs.cpu().numpy()[0]
+        top_indices = top_indices.cpu().numpy()[0]
+
+        # Build results
+        all_predictions = [
+            (self.class_names[idx], float(prob))
+            for idx, prob in zip(top_indices, top_probs)
+        ]
+
+        predicted_class = all_predictions[0][0]
+        confidence = all_predictions[0][1]
+
+        # Low confidence warning
+        low_confidence_warning = confidence < 0.6
+
+        result = {
+            'predicted_class': predicted_class,
+            'confidence': confidence,
+            'all_predictions': all_predictions,
+            'low_confidence_warning': low_confidence_warning,
+            'confidence_threshold': 0.6,
+            'tta_used': True
+        }
+
         return result
     
     def predict_batch(self, image_paths):

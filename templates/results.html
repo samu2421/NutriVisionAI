@@ -40,6 +40,57 @@
         padding: 15px;
         margin-bottom: 20px;
     }
+
+    /* Tab Navigation Styling */
+    .nav-tabs .nav-link {
+        color: #0F172B;
+        font-weight: 600;
+        border: none;
+        border-bottom: 3px solid transparent;
+        padding: 12px 24px;
+        transition: all 0.3s ease;
+    }
+    .nav-tabs .nav-link:hover {
+        border-bottom-color: #FEA116;
+        color: #FEA116;
+    }
+    .nav-tabs .nav-link.active {
+        color: #FEA116;
+        background-color: transparent;
+        border-bottom-color: #FEA116;
+    }
+    .tab-content {
+        padding: 30px 0;
+    }
+
+    /* Human-in-the-Loop Badge */
+    .hitl-badge {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        display: inline-block;
+        margin-top: 10px;
+        animation: fadeIn 0.5s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Correction Dropdown Styling */
+    .correction-dropdown {
+        max-width: 400px;
+        margin-top: 15px;
+    }
+
+    /* Tab Icons */
+    .tab-icon {
+        margin-right: 8px;
+        font-size: 18px;
+    }
 </style>
 {% endblock %}
 
@@ -78,189 +129,556 @@
         </div>
         {% endif %}
 
-        <!-- Low Confidence Warning -->
-        {% if result.prediction.low_confidence_warning %}
-        <div class="low-confidence-warning wow fadeInUp" data-wow-delay="0.1s">
-            <h5><i class="fa fa-exclamation-triangle text-warning me-2"></i>Low Confidence Detection</h5>
-            <p class="mb-0">The AI is not very confident about this prediction ({{ "%.1f"|format(result.prediction.confidence * 100) }}%). 
-            You can manually correct it below if needed.</p>
+        <!-- Confidence-Aware Warning Banner -->
+        <div id="confidenceWarningBanner" style="display: none;">
+            <!-- Populated by JavaScript based on confidence level -->
         </div>
-        {% endif %}
 
-        <div class="row g-4">
-            <!-- Left Column: Image & Prediction -->
-            <div class="col-lg-5">
-                <!-- Food Image -->
-                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.1s">
-                    <h4 class="mb-3"><i class="fa fa-image text-primary me-2"></i>Uploaded Image</h4>
-                    <img src="{{ url_for('static', filename='uploads/' + result.image_path) }}" 
-                         class="food-image" alt="Food Image">
-                </div>
+        <!-- Tab Navigation -->
+        <ul class="nav nav-tabs mb-4 wow fadeInUp" data-wow-delay="0.1s" id="resultsTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview"
+                        type="button" role="tab" aria-controls="overview" aria-selected="true">
+                    <i class="fa fa-chart-line tab-icon"></i>Overview
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="nutrition-tab" data-bs-toggle="tab" data-bs-target="#nutrition"
+                        type="button" role="tab" aria-controls="nutrition" aria-selected="false">
+                    <i class="fa fa-flask tab-icon"></i>Nutrition Lab
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="chef-tab" data-bs-toggle="tab" data-bs-target="#chef"
+                        type="button" role="tab" aria-controls="chef" aria-selected="false">
+                    <i class="fa fa-utensils tab-icon"></i>Chef's Kitchen
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="eco-tab" data-bs-toggle="tab" data-bs-target="#eco"
+                        type="button" role="tab" aria-controls="eco" aria-selected="false">
+                    <i class="fa fa-leaf tab-icon"></i>Eco-Impact
+                </button>
+            </li>
+        </ul>
 
-                <!-- Prediction Results -->
-                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.3s">
-                    <h4 class="mb-3"><i class="fa fa-brain text-primary me-2"></i>AI Prediction</h4>
-                    <h2 class="text-primary">{{ result.prediction.predicted_class.replace('_', ' ').title() }}</h2>
-                    
-                    <div class="mb-3">
-                        <label class="form-label"><strong>Confidence:</strong> {{ "%.1f"|format(result.prediction.confidence * 100) }}%</label>
-                        <div class="progress">
-                            <div class="progress-bar bg-primary confidence-bar" role="progressbar" 
-                                 style="width: {{ result.prediction.confidence * 100 }}%"></div>
+        <!-- Tab Content -->
+        <div class="tab-content" id="resultsTabContent">
+
+            <!-- TAB 1: OVERVIEW (Executive Summary) -->
+            <div class="tab-pane fade show active" id="overview" role="tabpanel" aria-labelledby="overview-tab">
+                <div class="row g-4">
+                    <!-- Left Column: Image -->
+                    <div class="col-lg-5">
+                        <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.1s" style="position: relative;">
+                            <h4 class="mb-3"><i class="fa fa-image text-primary me-2"></i>Uploaded Image</h4>
+                            <div style="position: relative;">
+                                <img src="{{ url_for('static', filename='uploads/' + result.image_path) }}"
+                                     class="food-image" alt="Food Image" id="foodImage">
+                                <!-- Confidence Badge Overlay -->
+                                <div id="imageConfidenceBadge" style="position: absolute; top: 10px; right: 10px;">
+                                    <!-- Populated by JavaScript -->
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Top 3 Predictions -->
-                    <h6 class="mt-4">Top 3 Predictions:</h6>
-                    <ul class="list-group">
-                        {% for food, conf in result.prediction.all_predictions[:3] %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            {{ food.replace('_', ' ').title() }}
-                            <span class="badge bg-primary rounded-pill">{{ "%.1f"|format(conf * 100) }}%</span>
-                        </li>
-                        {% endfor %}
-                    </ul>
+                    <!-- Right Column: Prediction & Correction -->
+                    <div class="col-lg-7">
+                        <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.2s">
+                            <h4 class="mb-3"><i class="fa fa-brain text-primary me-2"></i>AI Prediction</h4>
 
-                    <!-- Manual Correction -->
-                    <div class="mt-4">
-                        <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#correctionModal">
-                            <i class="fa fa-edit me-2"></i>Correct Prediction
-                        </button>
+                            <!-- Predicted Food Name -->
+                            <h2 class="text-primary mb-3" id="predictedFoodName">
+                                {{ result.prediction.predicted_class.replace('_', ' ').title() }}
+                            </h2>
+
+                            <!-- Confidence Bar -->
+                            <div class="mb-4">
+                                <label class="form-label d-flex justify-content-between align-items-center">
+                                    <span>
+                                        <strong>Confidence:</strong>
+                                        <span id="confidenceValue">{{ "%.1f"|format(result.prediction.confidence * 100) }}%</span>
+                                    </span>
+                                    <span id="confidenceLevel" class="badge">
+                                        <!-- Populated by JavaScript -->
+                                    </span>
+                                </label>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar confidence-bar" role="progressbar"
+                                         id="confidenceBar"
+                                         style="width: {{ result.prediction.confidence * 100 }}%"></div>
+                                </div>
+                                <small class="text-muted" id="confidenceHint">
+                                    <!-- Populated by JavaScript -->
+                                </small>
+                            </div>
+
+                            <!-- Human-in-the-Loop Correction Dropdown -->
+                            <div class="correction-dropdown">
+                                <label class="form-label">
+                                    <strong>Human-in-the-Loop Correction (Usability & Error Handling)</strong>
+                                </label>
+                                <select class="form-select" id="correctionDropdown">
+                                    <option value="" selected>Select correct food (if prediction is wrong)</option>
+                                    {% for food, conf in result.prediction.all_predictions[:3] %}
+                                    <option value="{{ food }}" data-confidence="{{ conf }}">
+                                        {{ food.replace('_', ' ').title() }} ({{ "%.1f"|format(conf * 100) }}%)
+                                    </option>
+                                    {% endfor %}
+                                </select>
+
+                                <!-- Correction Badge (hidden by default) -->
+                                <div id="correctionBadge" class="hitl-badge" style="display: none;">
+                                    <i class="fa fa-check-circle me-2"></i>Prediction corrected by user (Human-in-the-Loop)
+                                </div>
+                            </div>
+
+                            <!-- Top 3 Predictions (Confidence-Aware) -->
+                            <div class="mt-4" id="top3Container">
+                                <h6 class="mb-3">
+                                    <i class="fa fa-list-ol text-primary me-2"></i>Top 3 Predictions:
+                                </h6>
+                                <ul class="list-group" id="top3List">
+                                    {% for food, conf in result.prediction.all_predictions[:3] %}
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span>
+                                            {% if loop.index == 1 %}
+                                                <i class="fa fa-crown text-warning me-2"></i>
+                                            {% endif %}
+                                            {{ food.replace('_', ' ').title() }}
+                                        </span>
+                                        <span class="badge {% if conf >= 0.80 %}bg-success{% elif conf >= 0.60 %}bg-warning{% else %}bg-danger{% endif %} rounded-pill">
+                                            {{ "%.1f"|format(conf * 100) }}%
+                                        </span>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+
+                            <!-- Quick Stats -->
+                            {% if result.nutrition.status == 'success' %}
+                            <div class="row mt-4 text-center" id="quickStats">
+                                <div class="col-4">
+                                    <div class="p-3 bg-light rounded">
+                                        <h4 class="text-primary mb-0" id="quickCalories">{{ result.nutrition.calories }}</h4>
+                                        <small class="text-muted">Calories</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="p-3 bg-light rounded">
+                                        <h4 class="text-success mb-0" id="quickEcoScore">{{ result.nutrition.eco_score }}/10</h4>
+                                        <small class="text-muted">Eco Score</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="p-3 bg-light rounded">
+                                        <h4 class="text-warning mb-0" id="quickProtein">{{ result.nutrition.macros.protein }}</h4>
+                                        <small class="text-muted">Protein</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
+
+                <!-- Burn-Off Activities Card (Prominent) -->
+                {% if result.nutrition.status == 'success' %}
+                <div class="row g-4 mt-2">
+                    <div class="col-12">
+                        <div class="result-card bg-gradient-primary text-white wow fadeInUp" data-wow-delay="0.2s" style="background: linear-gradient(135deg, #FEA116 0%, #FF6B35 100%);">
+                            <h4 class="mb-4 text-white">
+                                <i class="fa fa-fire me-2"></i>Burn-Off Activities
+                                <small class="ms-2" style="font-size: 0.7em; opacity: 0.9;">(to burn {{ result.nutrition.calories }} calories)</small>
+                            </h4>
+                            <div class="row text-center">
+                                <div class="col-md-4 mb-3 mb-md-0">
+                                    <div class="p-4 rounded" style="background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(10px);">
+                                        <i class="fa fa-running fa-3x mb-3 text-white"></i>
+                                        <h2 class="mb-2 fw-bold text-white" id="runMins">{{ result.nutrition.burn_off.run_mins }}</h2>
+                                        <p class="mb-1 fw-bold text-white" style="font-size: 1rem;">Minutes of Running</p>
+                                        <small class="text-white" style="opacity: 0.9; font-size: 0.85rem;">(at 8 km/h pace)</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3 mb-md-0">
+                                    <div class="p-4 rounded" style="background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(10px);">
+                                        <i class="fa fa-bicycle fa-3x mb-3 text-white"></i>
+                                        <h2 class="mb-2 fw-bold text-white" id="cyclingMins">{{ (result.nutrition.burn_off.run_mins * 1.5)|int }}</h2>
+                                        <p class="mb-1 fw-bold text-white" style="font-size: 1rem;">Minutes of Cycling</p>
+                                        <small class="text-white" style="opacity: 0.9; font-size: 0.85rem;">(at moderate pace)</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="p-4 rounded" style="background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(10px);">
+                                        <i class="fa fa-spa fa-3x mb-3 text-white"></i>
+                                        <h2 class="mb-2 fw-bold text-white" id="yogaRounds">{{ result.nutrition.burn_off.yoga_rounds }}</h2>
+                                        <p class="mb-1 fw-bold text-white" style="font-size: 1rem;">Surya Namaskar Rounds</p>
+                                        <small class="text-white" style="opacity: 0.9; font-size: 0.85rem;">(traditional yoga)</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="alert alert-light mt-4 mb-0" style="background: rgba(255,255,255,0.15); border: none;">
+                                <small class="text-white">
+                                    <i class="fa fa-info-circle me-2"></i>
+                                    <strong>Note:</strong> These values update automatically when you adjust the portion slider above.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Time-Aware Contextual Intelligence -->
+                {% if result.nutrition.status == 'success' %}
+                <div class="row g-4 mt-2">
+                    <div class="col-12">
+                        <div class="result-card wow fadeInUp" data-wow-delay="0.3s" id="timeAwareCard" style="display: none;">
+                            <!-- Content populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
 
-            <!-- Right Column: Nutrition & Analysis -->
-            <div class="col-lg-7">
-                <!-- Nutrition Overview -->
-                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.2s">
-                    <h4 class="mb-4"><i class="fa fa-chart-pie text-primary me-2"></i>Nutrition Facts</h4>
-                    
-                    {% if result.nutrition.status == 'success' %}
-                    <div class="row text-center mb-4">
-                        <div class="col-md-3 col-6 mb-3">
-                            <div class="macro-circle bg-primary text-white">
-                                {{ result.nutrition.calories }}
-                            </div>
-                            <p class="mt-2 mb-0"><strong>Calories</strong></p>
-                            <small class="text-muted">kcal</small>
-                        </div>
-                        <div class="col-md-3 col-6 mb-3">
-                            <div class="macro-circle" style="background-color: #FEA116; color: white;">
-                                {{ result.nutrition.macros.protein }}
-                            </div>
-                            <p class="mt-2 mb-0"><strong>Protein</strong></p>
-                            <small class="text-muted">grams</small>
-                        </div>
-                        <div class="col-md-3 col-6 mb-3">
-                            <div class="macro-circle" style="background-color: #28a745; color: white;">
-                                {{ result.nutrition.macros.carbs }}
-                            </div>
-                            <p class="mt-2 mb-0"><strong>Carbs</strong></p>
-                            <small class="text-muted">grams</small>
-                        </div>
-                        <div class="col-md-3 col-6 mb-3">
-                            <div class="macro-circle" style="background-color: #dc3545; color: white;">
-                                {{ result.nutrition.macros.fats }}
-                            </div>
-                            <p class="mt-2 mb-0"><strong>Fats</strong></p>
-                            <small class="text-muted">grams</small>
-                        </div>
-                    </div>
 
-                    <!-- Portion Size Control -->
-                    <div class="mb-4">
-                        <label for="portionSlider" class="form-label">
-                            <strong>Adjust Portion:</strong> <span id="portionDisplay">{{ result.portion_multiplier }}x</span>
-                        </label>
-                        <input type="range" class="form-range" id="portionSlider" 
-                               min="0.5" max="3.0" step="0.1" value="{{ result.portion_multiplier }}">
-                    </div>
-
-                    <!-- Additional Nutrition -->
-                    <div class="row">
-                        <div class="col-6">
-                            <p><strong>Fiber:</strong> {{ result.nutrition.macros.fiber }}g</p>
-                        </div>
-                        <div class="col-6">
-                            <p><strong>Serving Size:</strong> {{ result.nutrition.serving_size }}</p>
-                        </div>
-                    </div>
-                    {% else %}
-                    <p class="text-muted">Nutrition data not available for this food item.</p>
-                    {% endif %}
-                </div>
-
-                <!-- Burn-off Activities -->
+            <!-- TAB 2: NUTRITION LAB (Data View) -->
+            <div class="tab-pane fade" id="nutrition" role="tabpanel" aria-labelledby="nutrition-tab">
                 {% if result.nutrition.status == 'success' %}
-                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.4s">
-                    <h4 class="mb-3"><i class="fa fa-running text-primary me-2"></i>Burn-off Activities</h4>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="text-center p-3 bg-light rounded">
-                                <i class="fa fa-3x fa-running text-primary mb-2"></i>
-                                <h3 class="text-primary">{{ result.nutrition.burn_off.run_mins }}</h3>
-                                <p class="mb-0">Minutes of Running</p>
+                <div class="row g-4">
+                    <!-- LEFT COLUMN: Nutrition Summary & Controls -->
+                    <div class="col-lg-6 col-md-12">
+                        <!-- Nutrition Summary Card -->
+                        <div class="result-card bg-white">
+                            <h4 class="mb-4"><i class="fa fa-table text-primary me-2"></i>Nutrition Summary</h4>
+
+                            <table class="table table-hover" id="macroTable">
+                                <thead>
+                                    <tr>
+                                        <th>Nutrient</th>
+                                        <th>Amount</th>
+                                        <th>% Daily Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Calories</strong></td>
+                                        <td id="tableCalories">{{ result.nutrition.calories }} kcal</td>
+                                        <td>~{{ (result.nutrition.calories / 2000 * 100)|int }}%</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Protein</strong></td>
+                                        <td id="tableProtein">{{ result.nutrition.macros.protein }}</td>
+                                        <td>~{{ (result.nutrition.macros.protein|replace('g', '')|int / 50 * 100)|int }}%</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Carbohydrates</strong></td>
+                                        <td id="tableCarbs">{{ result.nutrition.macros.carbs }}</td>
+                                        <td>~{{ (result.nutrition.macros.carbs|replace('g', '')|int / 300 * 100)|int }}%</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Fats</strong></td>
+                                        <td id="tableFats">{{ result.nutrition.macros.fat }}</td>
+                                        <td>~{{ (result.nutrition.macros.fat|replace('g', '')|int / 70 * 100)|int }}%</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div class="mt-3">
+                                <p class="mb-0"><strong>Serving Size:</strong> <span id="servingSize">{{ result.nutrition.serving_size }}</span></p>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="text-center p-3 bg-light rounded">
-                                <i class="fa fa-3x fa-spa text-primary mb-2"></i>
-                                <h3 class="text-primary">{{ result.nutrition.burn_off.yoga_rounds }}</h3>
-                                <p class="mb-0">Surya Namaskar Rounds</p>
+
+                        <!-- Portion Simulator -->
+                        <div class="result-card bg-white mt-4">
+                            <h4 class="mb-3"><i class="fa fa-sliders-h text-primary me-2"></i>Portion Simulator</h4>
+
+                            <label for="portionSlider" class="form-label">
+                                <strong>Adjust Portion:</strong> <span id="portionDisplay">{{ result.portion_multiplier }}x</span>
+                            </label>
+                            <input type="range" class="form-range" id="portionSlider"
+                                   min="0.5" max="3.0" step="0.1" value="{{ result.portion_multiplier }}">
+
+                            <div class="mt-3 p-3 bg-light rounded" id="portionFeedback">
+                                <p class="mb-0" id="portionText">
+                                    <i class="fa fa-info-circle text-info me-2"></i>
+                                    Adjust the slider to see how portion size affects nutrition.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT COLUMN: Radar Chart -->
+                    <div class="col-lg-6 col-md-12">
+                        <div class="result-card bg-white h-100 d-flex flex-column justify-content-center">
+                            <h4 class="mb-4"><i class="fa fa-chart-radar text-primary me-2"></i>Macro Balance Analysis</h4>
+                            <div style="position: relative; height: 400px;">
+                                <canvas id="macroRadarChart"></canvas>
                             </div>
                         </div>
                     </div>
                 </div>
-                {% endif %}
 
-                <!-- Sustainability Score -->
-                {% if result.nutrition.status == 'success' %}
-                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.5s">
-                    <h4 class="mb-3"><i class="fa fa-leaf text-primary me-2"></i>Sustainability</h4>
-                    <div class="text-center">
-                        <div class="eco-badge text-success">{{ result.nutrition.eco_score }}/10</div>
-                        <p class="mb-2"><strong>Environmental Impact: {{ result.nutrition.sustainability }}</strong></p>
-                        <p class="text-muted">{{ result.ai_analysis.sustainability_explanation }}</p>
+                <!-- FULL WIDTH ROW: Interactive Macro Lab -->
+                <div class="row g-4 mt-2">
+                    <div class="col-12">
+                        <div class="result-card bg-white">
+                            <h4 class="mb-3">
+                                <i class="fa fa-flask text-primary me-2"></i>Interactive Macro Lab
+                                <button id="resetMacrosBtn" class="btn btn-sm btn-outline-secondary float-end">
+                                    <i class="fa fa-undo"></i> Reset
+                                </button>
+                            </h4>
+                            <p class="text-muted small mb-4">
+                                Experiment with macro adjustments to see how they affect your meal balance
+                            </p>
+
+                            <div class="row">
+                                <!-- Protein Slider -->
+                                <div class="col-md-4 mb-4">
+                                    <label for="proteinSlider" class="form-label d-flex justify-content-between">
+                                        <span><i class="fa fa-drumstick-bite text-danger me-2"></i><strong>Protein</strong></span>
+                                        <span class="badge bg-danger" id="proteinValue">{{ result.nutrition.macros.protein|replace('g', '') }}g</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="proteinSlider"
+                                           min="0" max="100" step="1" value="{{ result.nutrition.macros.protein|replace('g', '') }}">
+                                    <div class="d-flex justify-content-between text-muted small">
+                                        <span>0g</span>
+                                        <span>50g</span>
+                                        <span>100g</span>
+                                    </div>
+                                </div>
+
+                                <!-- Carbs Slider -->
+                                <div class="col-md-4 mb-4">
+                                    <label for="carbsSlider" class="form-label d-flex justify-content-between">
+                                        <span><i class="fa fa-bread-slice text-warning me-2"></i><strong>Carbohydrates</strong></span>
+                                        <span class="badge bg-warning" id="carbsValue">{{ result.nutrition.macros.carbs|replace('g', '') }}g</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="carbsSlider"
+                                           min="0" max="150" step="1" value="{{ result.nutrition.macros.carbs|replace('g', '') }}">
+                                    <div class="d-flex justify-content-between text-muted small">
+                                        <span>0g</span>
+                                        <span>75g</span>
+                                        <span>150g</span>
+                                    </div>
+                                </div>
+
+                                <!-- Fats Slider -->
+                                <div class="col-md-4 mb-4">
+                                    <label for="fatsSlider" class="form-label d-flex justify-content-between">
+                                        <span><i class="fa fa-cheese text-success me-2"></i><strong>Fats</strong></span>
+                                        <span class="badge bg-success" id="fatsValue">{{ result.nutrition.macros.fat|replace('g', '') }}g</span>
+                                    </label>
+                                    <input type="range" class="form-range" id="fatsSlider"
+                                           min="0" max="80" step="1" value="{{ result.nutrition.macros.fat|replace('g', '') }}">
+                                    <div class="d-flex justify-content-between text-muted small">
+                                        <span>0g</span>
+                                        <span>40g</span>
+                                        <span>80g</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Live Feedback with Imbalance Warning -->
+                            <div class="mt-3 p-3 rounded" id="macroFeedback" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h5 class="mb-1" id="macroCalories">{{ result.nutrition.calories }} kcal</h5>
+                                        <small id="macroRatio">P:C:F = 1:6:4</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <span id="imbalanceWarning" class="badge bg-light text-dark me-2" style="display: none;">
+                                            <i class="fa fa-exclamation-triangle"></i> <span id="imbalanceText"></span>
+                                        </span>
+                                        <i class="fa fa-chart-line fa-2x opacity-75"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                {% endif %}
-
-                <!-- Cultural Context -->
-                {% if result.nutrition.status == 'success' %}
-                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.6s">
-                    <h4 class="mb-3"><i class="fa fa-globe text-primary me-2"></i>Cultural Context</h4>
-                    <p>{{ result.ai_analysis.cultural_explanation }}</p>
-                </div>
-                {% endif %}
-
-                <!-- Leftover Ideas -->
-                {% if result.nutrition.status == 'success' and result.ai_analysis.leftover_ideas %}
-                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.7s">
-                    <h4 class="mb-3"><i class="fa fa-lightbulb text-primary me-2"></i>Leftover Remix Ideas</h4>
-                    <ul class="list-group">
-                        {% for idea in result.ai_analysis.leftover_ideas %}
-                        <li class="list-group-item">
-                            <i class="fa fa-check-circle text-success me-2"></i>{{ idea }}
-                        </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-                {% endif %}
-
-                <!-- Dietary Tags -->
-                {% if result.nutrition.status == 'success' and result.nutrition.dietary_tags %}
-                <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.8s">
-                    <h4 class="mb-3"><i class="fa fa-tags text-primary me-2"></i>Dietary Information</h4>
-                    <div>
-                        {% for tag in result.nutrition.dietary_tags %}
-                        <span class="badge bg-primary me-2 mb-2">{{ tag }}</span>
-                        {% endfor %}
-                    </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="fa fa-exclamation-triangle me-2"></i>
+                    Nutrition data not available for this food item.
                 </div>
                 {% endif %}
             </div>
+
+            <!-- TAB 3: CHEF'S KITCHEN (GenAI View) -->
+            <div class="tab-pane fade" id="chef" role="tabpanel" aria-labelledby="chef-tab">
+                {% if result.nutrition.status == 'success' %}
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <!-- Leftover Remix Ideas -->
+                        {% if result.ai_analysis.leftover_ideas %}
+                        <div class="result-card bg-white">
+                            <h4 class="mb-3"><i class="fa fa-lightbulb text-primary me-2"></i>Leftover Remix Ideas</h4>
+                            <p class="text-muted mb-3">Creative ways to repurpose leftovers and reduce food waste:</p>
+                            <ul class="list-group">
+                                {% for idea in result.ai_analysis.leftover_ideas %}
+                                <li class="list-group-item">
+                                    <i class="fa fa-check-circle text-success me-2"></i>{{ idea }}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        <!-- Cultural Context -->
+                        <div class="result-card bg-white mt-4">
+                            <h4 class="mb-3"><i class="fa fa-globe text-primary me-2"></i>Cultural Context</h4>
+                            <p id="culturalText">{{ result.ai_analysis.cultural_explanation }}</p>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <!-- Flavor Pairing Suggestions -->
+                        <div class="result-card bg-white">
+                            <h4 class="mb-3"><i class="fa fa-wine-glass text-primary me-2"></i>Flavor Pairing Suggestions</h4>
+                            <p class="text-muted mb-3">Recommended pairings to enhance your meal:</p>
+                            <div class="p-3 bg-light rounded">
+                                <p class="mb-0" id="flavorPairing">
+                                    <strong>Suggested Pairing:</strong> {{ result.ai_analysis.flavor_pairing }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Dietary Tags -->
+                        {% if result.nutrition.dietary_tags %}
+                        <div class="result-card bg-white mt-4">
+                            <h4 class="mb-3"><i class="fa fa-tags text-primary me-2"></i>Dietary Information</h4>
+                            <div id="dietaryTags">
+                                {% for tag in result.nutrition.dietary_tags %}
+                                <span class="badge bg-primary me-2 mb-2">{{ tag }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- GenAI Explanation -->
+                        <div class="result-card bg-white mt-4">
+                            <h4 class="mb-3"><i class="fa fa-robot text-primary me-2"></i>AI Insights</h4>
+                            <div class="p-3 bg-light rounded" id="aiInsights">
+                                {{ result.ai_analysis.ai_insights }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="fa fa-exclamation-triangle me-2"></i>
+                    GenAI analysis not available for this food item.
+                </div>
+                {% endif %}
+            </div>
+
+
+            <!-- TAB 4: ECO-IMPACT (Sustainability View) -->
+            <div class="tab-pane fade" id="eco" role="tabpanel" aria-labelledby="eco-tab">
+                {% if result.nutrition.status == 'success' %}
+                <div class="row g-4 justify-content-center">
+                    <div class="col-lg-8">
+                        <div class="result-card bg-white text-center">
+                            <h4 class="mb-4"><i class="fa fa-leaf text-primary me-2"></i>Environmental Impact Score</h4>
+
+                            <!-- Eco Score Display -->
+                            <div class="mb-4">
+                                <div class="eco-badge
+                                    {% if result.nutrition.sustainability == 'Low' %}text-success
+                                    {% elif result.nutrition.sustainability == 'Medium' %}text-warning
+                                    {% else %}text-danger{% endif %}"
+                                    id="ecoScoreDisplay">
+                                    {{ result.nutrition.eco_score }}/10
+                                </div>
+                                <h5 class="mt-3" id="ecoImpactLevel">
+                                    Environmental Impact:
+                                    <span class="
+                                        {% if result.nutrition.sustainability == 'Low' %}text-success
+                                        {% elif result.nutrition.sustainability == 'Medium' %}text-warning
+                                        {% else %}text-danger{% endif %}">
+                                        {{ result.nutrition.sustainability }}
+                                    </span>
+                                </h5>
+                            </div>
+
+                            <!-- Sustainability Explanation -->
+                            <div class="p-4 bg-light rounded text-start">
+                                <h6 class="mb-3"><i class="fa fa-info-circle text-primary me-2"></i>What This Means:</h6>
+                                <p class="mb-0" id="sustainabilityExplanation">
+                                    {{ result.ai_analysis.sustainability_explanation }}
+                                </p>
+                            </div>
+
+                            <!-- Impact Breakdown -->
+                            <div class="row mt-4 text-start">
+                                <div class="col-md-4">
+                                    <div class="p-3 border rounded {% if result.nutrition.sustainability == 'Low' %}bg-success bg-opacity-10{% elif result.nutrition.sustainability == 'Medium' %}bg-warning bg-opacity-10{% else %}bg-danger bg-opacity-10{% endif %}">
+                                        <h6 class="{% if result.nutrition.sustainability == 'Low' %}text-success{% elif result.nutrition.sustainability == 'Medium' %}text-warning{% else %}text-danger{% endif %} fw-bold"><i class="fa fa-water me-2"></i>Water Usage</h6>
+                                        <p class="mb-0 fw-bold" style="color: #212529;">
+                                            {% if result.nutrition.sustainability == 'Low' %}
+                                            Low water footprint
+                                            {% elif result.nutrition.sustainability == 'Medium' %}
+                                            Moderate water usage
+                                            {% else %}
+                                            High water consumption
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="p-3 border rounded {% if result.nutrition.sustainability == 'Low' %}bg-success bg-opacity-10{% elif result.nutrition.sustainability == 'Medium' %}bg-warning bg-opacity-10{% else %}bg-danger bg-opacity-10{% endif %}">
+                                        <h6 class="{% if result.nutrition.sustainability == 'Low' %}text-success{% elif result.nutrition.sustainability == 'Medium' %}text-warning{% else %}text-danger{% endif %} fw-bold"><i class="fa fa-cloud me-2"></i>Carbon Footprint</h6>
+                                        <p class="mb-0 fw-bold" style="color: #212529;">
+                                            {% if result.nutrition.sustainability == 'Low' %}
+                                            Low CO₂ emissions
+                                            {% elif result.nutrition.sustainability == 'Medium' %}
+                                            Moderate emissions
+                                            {% else %}
+                                            Higher carbon impact
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="p-3 border rounded {% if result.nutrition.sustainability == 'Low' %}bg-success bg-opacity-10{% elif result.nutrition.sustainability == 'Medium' %}bg-warning bg-opacity-10{% else %}bg-danger bg-opacity-10{% endif %}">
+                                        <h6 class="{% if result.nutrition.sustainability == 'Low' %}text-success{% elif result.nutrition.sustainability == 'Medium' %}text-warning{% else %}text-danger{% endif %} fw-bold"><i class="fa fa-seedling me-2"></i>Local Sourcing</h6>
+                                        <p class="mb-0 fw-bold" style="color: #212529;">
+                                            {% if result.nutrition.sustainability == 'Low' %}
+                                            Locally available ingredients
+                                            {% elif result.nutrition.sustainability == 'Medium' %}
+                                            Mixed sourcing
+                                            {% else %}
+                                            May require imports
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Eco Tips -->
+                            <div class="mt-4 p-3 bg-success bg-opacity-10 rounded text-start">
+                                <h6 class="text-success"><i class="fa fa-lightbulb me-2"></i>Eco-Friendly Tips:</h6>
+                                <ul class="mb-0 small">
+                                    <li>Choose seasonal and local ingredients when possible</li>
+                                    <li>Minimize food waste by using leftovers creatively</li>
+                                    <li>Consider plant-based alternatives to reduce environmental impact</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="fa fa-exclamation-triangle me-2"></i>
+                    Sustainability data not available for this food item.
+                </div>
+                {% endif %}
+            </div>
+
         </div>
+        <!-- End Tab Content -->
 
         <!-- Action Buttons -->
         <div class="text-center mt-5 wow fadeInUp" data-wow-delay="0.9s">
@@ -271,120 +689,925 @@
                 <i class="fa fa-home me-2"></i>Back to Home
             </a>
         </div>
-    </div>
-</div>
-<!-- Results End -->
 
-<!-- Correction Modal -->
-<div class="modal fade" id="correctionModal" tabindex="-1" aria-labelledby="correctionModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="correctionModalLabel">Correct Prediction</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>If the AI prediction is incorrect, select the correct food item:</p>
-                <select class="form-select" id="correctedFood">
-                    <option value="">-- Select Food --</option>
-                </select>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="submitCorrection">Submit Correction</button>
+        <!-- Academic Note -->
+        <div class="mt-5 wow fadeInUp" data-wow-delay="0.6s">
+            <div class="alert alert-light border border-primary" style="background-color: #f8f9fa;">
+                <div class="d-flex align-items-start">
+                    <div class="me-3">
+                        <i class="fa fa-graduation-cap fa-2x text-primary"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h6 class="mb-2 text-primary">
+                            <i class="fa fa-info-circle me-2"></i>About AI Confidence & Real-World Images
+                        </h6>
+                        <p class="mb-2" style="font-size: 0.9rem;">
+                            This system uses <strong>inference pipeline improvements</strong> (aspect ratio preservation + test time augmentation)
+                            to handle real-world image variability. Confidence may vary due to <strong>domain shift</strong> between
+                            training data and real-world images (lighting, angles, backgrounds).
+                        </p>
+                        <p class="mb-0" style="font-size: 0.85rem;">
+                            <i class="fa fa-book me-2"></i>
+                            <strong>For academic reviewers:</strong> See <a href="{{ url_for('debug') }}" class="text-primary">Debug Page</a>
+                            for detailed documentation on model robustness improvements and academic justification.
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
+<!-- Results End -->
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    const portionSlider = document.getElementById('portionSlider');
-    const portionDisplay = document.getElementById('portionDisplay');
-    const correctedFoodSelect = document.getElementById('correctedFood');
-    const submitCorrectionBtn = document.getElementById('submitCorrection');
+    // ========================================
+    // DATA STORAGE - All food nutrition data
+    // ========================================
+    const allFoodData = {
+        {% for food, conf in result.prediction.all_predictions[:3] %}
+        "{{ food }}": {
+            confidence: {{ conf }},
+            // This data will be fetched from API when user selects correction
+            nutrition: null
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    };
 
     const currentFood = "{{ result.prediction.predicted_class }}";
-    const currentPortion = {{ result.portion_multiplier }};
+    let activeFoodName = currentFood;
+    let currentPortion = {{ result.portion_multiplier }};
 
-    // Load food list for correction dropdown
-    fetch('/api/food_list')
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                data.foods.forEach(food => {
-                    const option = document.createElement('option');
-                    option.value = food.value;
-                    option.textContent = food.label;
-                    correctedFoodSelect.appendChild(option);
-                });
-            }
-        });
+    // Base nutrition data (from current prediction)
+    const baseNutrition = {
+        calories: {{ result.nutrition.calories if result.nutrition.status == 'success' else 0 }},
+        protein: {{ result.nutrition.macros.protein|replace('g', '') if result.nutrition.status == 'success' else 0 }},
+        carbs: {{ result.nutrition.macros.carbs|replace('g', '') if result.nutrition.status == 'success' else 0 }},
+        fats: {{ result.nutrition.macros.fat|replace('g', '') if result.nutrition.status == 'success' else 0 }},
+        fiber: {{ result.nutrition.macros.fiber|replace('g', '') if result.nutrition.status == 'success' and result.nutrition.macros.fiber else 0 }},
+        runMins: {{ result.nutrition.burn_off.run_mins if result.nutrition.status == 'success' else 0 }},
+        yogaRounds: {{ result.nutrition.burn_off.yoga_rounds if result.nutrition.status == 'success' else 0 }},
+        ecoScore: {{ result.nutrition.eco_score if result.nutrition.status == 'success' else 0 }},
+        sustainability: "{{ result.nutrition.sustainability if result.nutrition.status == 'success' else 'Unknown' }}",
+        servingSize: "{{ result.nutrition.serving_size if result.nutrition.status == 'success' else 'N/A' }}"
+    };
 
-    // Portion slider update
-    if (portionSlider) {
-        portionSlider.addEventListener('input', (e) => {
-            const newPortion = parseFloat(e.target.value);
-            portionDisplay.textContent = newPortion.toFixed(1) + 'x';
-
-            // Update nutrition data via API
-            fetch('/api/update_portion', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    food_name: currentFood,
-                    portion_multiplier: newPortion
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    // Reload page to show updated nutrition
-                    location.reload();
-                }
-            })
-            .catch(error => console.error('Error:', error));
-        });
+    // ========================================
+    // TIME-AWARE CONTEXTUAL INTELLIGENCE
+    // ========================================
+    function getTimeOfDay() {
+        const hour = new Date().getHours();
+        if (hour >= 5 && hour < 11) return 'breakfast';
+        if (hour >= 11 && hour < 16) return 'lunch';
+        if (hour >= 16 && hour < 21) return 'dinner';
+        return 'late-night';
     }
 
-    // Submit correction
-    if (submitCorrectionBtn) {
-        submitCorrectionBtn.addEventListener('click', () => {
-            const correctedFood = correctedFoodSelect.value;
+    function getMealTimingAdvice(calories, timeOfDay) {
+        const advice = {
+            icon: '',
+            color: '',
+            title: '',
+            message: '',
+            recommendation: ''
+        };
 
-            if (!correctedFood) {
-                alert('Please select a food item');
+        // Breakfast (5 AM - 11 AM)
+        if (timeOfDay === 'breakfast') {
+            if (calories < 200) {
+                advice.icon = 'fa-exclamation-triangle';
+                advice.color = 'warning';
+                advice.title = 'Light Breakfast Alert';
+                advice.message = `This meal provides only ${calories} calories, which may be insufficient for breakfast.`;
+                advice.recommendation = 'Consider adding protein-rich foods or whole grains for sustained energy throughout the morning.';
+            } else if (calories > 600) {
+                advice.icon = 'fa-info-circle';
+                advice.color = 'info';
+                advice.title = 'Hearty Breakfast';
+                advice.message = `This is a substantial breakfast with ${calories} calories.`;
+                advice.recommendation = 'Great for active mornings! Ensure you stay hydrated and consider lighter meals later.';
+            } else {
+                advice.icon = 'fa-check-circle';
+                advice.color = 'success';
+                advice.title = 'Well-Balanced Breakfast';
+                advice.message = `Perfect breakfast portion with ${calories} calories.`;
+                advice.recommendation = 'This meal provides good energy for your morning activities.';
+            }
+        }
+        // Lunch (11 AM - 4 PM)
+        else if (timeOfDay === 'lunch') {
+            if (calories < 300) {
+                advice.icon = 'fa-exclamation-triangle';
+                advice.color = 'warning';
+                advice.title = 'Light Lunch Alert';
+                advice.message = `This meal provides only ${calories} calories for lunch.`;
+                advice.recommendation = 'Consider adding vegetables or a side dish to meet your midday energy needs.';
+            } else if (calories > 700) {
+                advice.icon = 'fa-exclamation-circle';
+                advice.color = 'warning';
+                advice.title = 'Heavy Lunch Warning';
+                advice.message = `This is a heavy lunch with ${calories} calories.`;
+                advice.recommendation = 'Large lunches may cause afternoon drowsiness. Consider a lighter portion or plan for a lighter dinner.';
+            } else {
+                advice.icon = 'fa-check-circle';
+                advice.color = 'success';
+                advice.title = 'Balanced Lunch';
+                advice.message = `Appropriate lunch portion with ${calories} calories.`;
+                advice.recommendation = 'This meal should sustain you through the afternoon.';
+            }
+        }
+        // Dinner (4 PM - 9 PM)
+        else if (timeOfDay === 'dinner') {
+            if (calories < 300) {
+                advice.icon = 'fa-info-circle';
+                advice.color = 'info';
+                advice.title = 'Light Dinner';
+                advice.message = `This is a light dinner with ${calories} calories.`;
+                advice.recommendation = 'Light dinners are beneficial for digestion and sleep quality.';
+            } else if (calories > 700) {
+                advice.icon = 'fa-exclamation-triangle';
+                advice.color = 'danger';
+                advice.title = 'Heavy Dinner Warning';
+                advice.message = `This is a heavy dinner with ${calories} calories.`;
+                advice.recommendation = 'Heavy evening meals may disrupt sleep and digestion. Consider eating earlier or reducing portion size.';
+            } else {
+                advice.icon = 'fa-check-circle';
+                advice.color = 'success';
+                advice.title = 'Balanced Dinner';
+                advice.message = `Appropriate dinner portion with ${calories} calories.`;
+                advice.recommendation = 'This meal should satisfy you without being too heavy before bedtime.';
+            }
+        }
+        // Late Night (9 PM - 5 AM)
+        else {
+            if (calories > 400) {
+                advice.icon = 'fa-exclamation-triangle';
+                advice.color = 'danger';
+                advice.title = 'Late-Night Eating Alert';
+                advice.message = `Consuming ${calories} calories late at night may affect sleep quality and metabolism.`;
+                advice.recommendation = 'If hungry, consider a lighter snack (under 200 calories) or herbal tea instead.';
+            } else if (calories > 200) {
+                advice.icon = 'fa-info-circle';
+                advice.color = 'warning';
+                advice.title = 'Late-Night Snack';
+                advice.message = `This is a ${calories}-calorie late-night snack.`;
+                advice.recommendation = 'Try to finish eating at least 2-3 hours before bedtime for better sleep.';
+            } else {
+                advice.icon = 'fa-check-circle';
+                advice.color = 'success';
+                advice.title = 'Light Late-Night Snack';
+                advice.message = `This light snack (${calories} calories) is acceptable for late-night consumption.`;
+                advice.recommendation = 'Keep it light and avoid heavy, spicy, or fatty foods before bed.';
+            }
+        }
+
+        return advice;
+    }
+
+    function displayTimeAwareWarning() {
+        const timeOfDay = getTimeOfDay();
+        const calories = baseNutrition.calories;
+        const advice = getMealTimingAdvice(calories, timeOfDay);
+
+        const timeAwareCard = document.getElementById('timeAwareCard');
+        if (!timeAwareCard) return;
+
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+        const mealTimeLabels = {
+            'breakfast': 'Breakfast Time',
+            'lunch': 'Lunch Time',
+            'dinner': 'Dinner Time',
+            'late-night': 'Late-Night Snack'
+        };
+
+        timeAwareCard.innerHTML = `
+            <div class="alert alert-${advice.color} border-${advice.color} mb-0">
+                <div class="d-flex align-items-start">
+                    <div class="me-3">
+                        <i class="fa ${advice.icon} fa-2x"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h5 class="alert-heading mb-2">
+                            <i class="fa fa-clock me-2"></i>${advice.title}
+                            <span class="badge bg-${advice.color} float-end">${timeString} - ${mealTimeLabels[timeOfDay]}</span>
+                        </h5>
+                        <p class="mb-2"><strong>${advice.message}</strong></p>
+                        <p class="mb-0"><i class="fa fa-lightbulb me-2"></i>${advice.recommendation}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        timeAwareCard.style.display = 'block';
+    }
+
+    function updateTimeAwareWarning(calories) {
+        const timeOfDay = getTimeOfDay();
+        const advice = getMealTimingAdvice(calories, timeOfDay);
+
+        const timeAwareCard = document.getElementById('timeAwareCard');
+        if (!timeAwareCard) return;
+
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+        const mealTimeLabels = {
+            'breakfast': 'Breakfast Time',
+            'lunch': 'Lunch Time',
+            'dinner': 'Dinner Time',
+            'late-night': 'Late-Night Snack'
+        };
+
+        timeAwareCard.innerHTML = `
+            <div class="alert alert-${advice.color} border-${advice.color} mb-0">
+                <div class="d-flex align-items-start">
+                    <div class="me-3">
+                        <i class="fa ${advice.icon} fa-2x"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h5 class="alert-heading mb-2">
+                            <i class="fa fa-clock me-2"></i>${advice.title}
+                            <span class="badge bg-${advice.color} float-end">${timeString} - ${mealTimeLabels[timeOfDay]}</span>
+                        </h5>
+                        <p class="mb-2"><strong>${advice.message}</strong></p>
+                        <p class="mb-0"><i class="fa fa-lightbulb me-2"></i>${advice.recommendation}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Initialize time-aware warning on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        displayTimeAwareWarning();
+        initializeConfidenceAwareUI();
+    });
+
+    // ========================================
+    // CONFIDENCE-AWARE UI ENHANCEMENTS
+    // ========================================
+    function getConfidenceLevel(confidence) {
+        if (confidence >= 0.80) return 'high';
+        if (confidence >= 0.60) return 'medium';
+        return 'low';
+    }
+
+    function getConfidenceColor(confidence) {
+        if (confidence >= 0.80) return 'success';  // Green
+        if (confidence >= 0.60) return 'warning';  // Yellow
+        return 'danger';  // Red
+    }
+
+    function getConfidenceLabel(confidence) {
+        if (confidence >= 0.80) return 'High Confidence';
+        if (confidence >= 0.60) return 'Moderate Confidence';
+        return 'Low Confidence';
+    }
+
+    function getConfidenceHint(confidence) {
+        if (confidence >= 0.80) {
+            return 'The AI is confident about this prediction.';
+        } else if (confidence >= 0.60) {
+            return 'The AI has moderate confidence. This is normal for real-world images with lighting/angle variations.';
+        } else {
+            return 'Low confidence due to real-world image variability. Please verify using the correction dropdown below.';
+        }
+    }
+
+    function getConfidenceBannerContent(confidence) {
+        const level = getConfidenceLevel(confidence);
+        const color = getConfidenceColor(confidence);
+        const percentage = (confidence * 100).toFixed(1);
+
+        if (level === 'low') {
+            return `
+                <div class="alert alert-${color} border-${color} wow fadeInUp" data-wow-delay="0.1s">
+                    <div class="d-flex align-items-start">
+                        <div class="me-3">
+                            <i class="fa fa-exclamation-triangle fa-2x"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h5 class="alert-heading mb-2">
+                                <i class="fa fa-robot me-2"></i>Low Confidence Detection
+                                <span class="badge bg-${color} float-end">${percentage}%</span>
+                            </h5>
+                            <p class="mb-2">
+                                <strong>Low confidence due to real-world image variability.</strong>
+                            </p>
+                            <p class="mb-2">
+                                <i class="fa fa-info-circle me-2"></i>
+                                This may occur due to domain shift between training data and real-world images
+                                (lighting, angle, background variations). This reflects realistic AI behavior.
+                            </p>
+                            <p class="mb-0">
+                                <i class="fa fa-lightbulb me-2"></i>
+                                <strong>Recommendation:</strong> Please review the Top 3 Predictions below and use the
+                                Human-in-the-Loop correction dropdown if the prediction appears incorrect.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (level === 'medium') {
+            return `
+                <div class="alert alert-${color} border-${color} wow fadeInUp" data-wow-delay="0.1s">
+                    <div class="d-flex align-items-center">
+                        <div class="me-3">
+                            <i class="fa fa-info-circle fa-2x"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-0">
+                                <i class="fa fa-robot me-2"></i>Moderate Confidence Prediction
+                                <span class="badge bg-${color} float-end">${percentage}%</span>
+                            </h6>
+                            <small class="text-muted">
+                                The AI has reasonable confidence. Moderate confidence is normal for real-world images
+                                with lighting or angle variations. Review the top predictions to ensure accuracy.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        // High confidence (≥80%) - no banner needed
+        return '';
+    }
+
+    function initializeConfidenceAwareUI() {
+        const initialConfidence = {{ result.prediction.confidence }};
+        updateConfidenceUI(initialConfidence);
+    }
+
+    function updateConfidenceUI(confidence) {
+        const confidenceBar = document.getElementById('confidenceBar');
+        const confidenceLevel = document.getElementById('confidenceLevel');
+        const confidenceHint = document.getElementById('confidenceHint');
+        const confidenceWarningBanner = document.getElementById('confidenceWarningBanner');
+        const imageConfidenceBadge = document.getElementById('imageConfidenceBadge');
+
+        const color = getConfidenceColor(confidence);
+        const label = getConfidenceLabel(confidence);
+        const hint = getConfidenceHint(confidence);
+        const bannerContent = getConfidenceBannerContent(confidence);
+        const percentage = (confidence * 100).toFixed(1);
+
+        // Update confidence bar color
+        if (confidenceBar) {
+            confidenceBar.className = `progress-bar bg-${color} confidence-bar`;
+        }
+
+        // Update confidence level badge
+        if (confidenceLevel) {
+            confidenceLevel.className = `badge bg-${color}`;
+            confidenceLevel.textContent = label;
+        }
+
+        // Update confidence hint
+        if (confidenceHint) {
+            confidenceHint.innerHTML = `<i class="fa fa-info-circle me-1"></i>${hint}`;
+        }
+
+        // Update warning banner
+        if (confidenceWarningBanner) {
+            if (bannerContent) {
+                confidenceWarningBanner.innerHTML = bannerContent;
+                confidenceWarningBanner.style.display = 'block';
+            } else {
+                confidenceWarningBanner.style.display = 'none';
+            }
+        }
+
+        // Update image confidence badge overlay
+        if (imageConfidenceBadge) {
+            const icon = confidence >= 0.80 ? 'fa-check-circle' : confidence >= 0.60 ? 'fa-info-circle' : 'fa-exclamation-triangle';
+            imageConfidenceBadge.innerHTML = `
+                <span class="badge bg-${color} shadow-sm" style="font-size: 0.9rem; padding: 0.5rem 0.75rem;">
+                    <i class="fa ${icon} me-1"></i>${percentage}%
+                </span>
+            `;
+        }
+    }
+
+    // ========================================
+    // HUMAN-IN-THE-LOOP CORRECTION
+    // ========================================
+    const correctionDropdown = document.getElementById('correctionDropdown');
+    const correctionBadge = document.getElementById('correctionBadge');
+    const predictedFoodName = document.getElementById('predictedFoodName');
+    const confidenceValue = document.getElementById('confidenceValue');
+    const confidenceBar = document.getElementById('confidenceBar');
+
+    if (correctionDropdown) {
+        correctionDropdown.addEventListener('change', function() {
+            const selectedFood = this.value;
+
+            if (!selectedFood) {
+                // Reset to original prediction
+                correctionBadge.style.display = 'none';
                 return;
             }
 
-            fetch('/api/correct_prediction', {
+            // Get selected option data
+            const selectedOption = this.options[this.selectedIndex];
+            const selectedConfidence = parseFloat(selectedOption.dataset.confidence);
+
+            // Update UI immediately (frontend-only)
+            activeFoodName = selectedFood;
+            predictedFoodName.textContent = selectedFood.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            confidenceValue.textContent = (selectedConfidence * 100).toFixed(1) + '%';
+            confidenceBar.style.width = (selectedConfidence * 100) + '%';
+
+            // Update confidence-aware UI
+            updateConfidenceUI(selectedConfidence);
+
+            // Show correction badge
+            correctionBadge.style.display = 'inline-block';
+
+            // Fetch nutrition data for corrected food
+            fetch('/api/update_portion', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    corrected_food: correctedFood,
+                    food_name: selectedFood,
                     portion_multiplier: currentPortion
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    // Reload page to show corrected results
-                    location.reload();
-                } else {
-                    alert('Error: ' + data.message);
+                    updateAllNutritionUI(data.nutrition);
                 }
             })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while correcting the prediction');
-            });
+            .catch(error => console.error('Error fetching nutrition:', error));
         });
     }
+
+    // ========================================
+    // PORTION SLIDER - "WHAT IF" SIMULATOR
+    // ========================================
+    const portionSlider = document.getElementById('portionSlider');
+    const portionDisplay = document.getElementById('portionDisplay');
+    const portionFeedback = document.getElementById('portionFeedback');
+    const portionText = document.getElementById('portionText');
+
+    if (portionSlider) {
+        portionSlider.addEventListener('input', function(e) {
+            const newPortion = parseFloat(e.target.value);
+            currentPortion = newPortion;
+            portionDisplay.textContent = newPortion.toFixed(1) + 'x';
+
+            // Calculate scaled nutrition values
+            const scaledCalories = Math.round(baseNutrition.calories * newPortion);
+            const scaledProtein = Math.round(baseNutrition.protein * newPortion);
+            const scaledCarbs = Math.round(baseNutrition.carbs * newPortion);
+            const scaledFats = Math.round(baseNutrition.fats * newPortion);
+            const scaledFiber = Math.round(baseNutrition.fiber * newPortion);
+            const scaledRunMins = Math.round(baseNutrition.runMins * newPortion);
+            const scaledYogaRounds = Math.round(baseNutrition.yogaRounds * newPortion);
+
+            // Update UI elements
+            updateNutritionValues(scaledCalories, scaledProtein, scaledCarbs, scaledFats, scaledFiber, scaledRunMins, scaledYogaRounds);
+
+            // Update portion feedback with color coding
+            updatePortionFeedback(newPortion, scaledCalories, scaledRunMins);
+
+            // Update time-aware warning with new calorie count
+            updateTimeAwareWarning(scaledCalories);
+        });
+    }
+
+    function updateNutritionValues(calories, protein, carbs, fats, fiber, runMins, yogaRounds) {
+        // Update Quick Stats (Overview Tab)
+        const quickCalories = document.getElementById('quickCalories');
+        const quickProtein = document.getElementById('quickProtein');
+        if (quickCalories) quickCalories.textContent = calories;
+        if (quickProtein) quickProtein.textContent = protein + 'g';
+
+        // Update Nutrition Lab Table
+        const tableCalories = document.getElementById('tableCalories');
+        const tableProtein = document.getElementById('tableProtein');
+        const tableCarbs = document.getElementById('tableCarbs');
+        const tableFats = document.getElementById('tableFats');
+        const tableFiber = document.getElementById('tableFiber');
+
+        if (tableCalories) tableCalories.textContent = calories + ' kcal';
+        if (tableProtein) tableProtein.textContent = protein + 'g';
+        if (tableCarbs) tableCarbs.textContent = carbs + 'g';
+        if (tableFats) tableFats.textContent = fats + 'g';
+        if (tableFiber) tableFiber.textContent = fiber + 'g';
+
+        // Update Burn-off Activities
+        const runMinsEl = document.getElementById('runMins');
+        const cyclingMinsEl = document.getElementById('cyclingMins');
+        const yogaRoundsEl = document.getElementById('yogaRounds');
+        if (runMinsEl) runMinsEl.textContent = runMins;
+        if (cyclingMinsEl) cyclingMinsEl.textContent = Math.round(runMins * 1.5);
+        if (yogaRoundsEl) yogaRoundsEl.textContent = yogaRounds;
+
+        // Update Radar Chart (if initialized)
+        updateRadarChart(protein, carbs, fats);
+    }
+
+    function updatePortionFeedback(portion, calories, runMins) {
+        let message = '';
+        let bgClass = 'bg-light';
+        let iconClass = 'fa-info-circle text-info';
+
+        if (portion >= 2.5) {
+            bgClass = 'bg-danger bg-opacity-10';
+            iconClass = 'fa-exclamation-triangle text-danger';
+            message = `At ${portion.toFixed(1)}× portion, this equals ${calories} calories and requires ${runMins} minutes of running to burn off. Consider reducing portion size.`;
+        } else if (portion >= 1.5) {
+            bgClass = 'bg-warning bg-opacity-10';
+            iconClass = 'fa-exclamation-circle text-warning';
+            message = `At ${portion.toFixed(1)}× portion, this equals ${calories} calories and requires ${runMins} minutes of running to burn off.`;
+        } else if (portion < 0.8) {
+            bgClass = 'bg-success bg-opacity-10';
+            iconClass = 'fa-check-circle text-success';
+            message = `At ${portion.toFixed(1)}× portion, this is a lighter meal with ${calories} calories.`;
+        } else {
+            bgClass = 'bg-info bg-opacity-10';
+            iconClass = 'fa-info-circle text-info';
+            message = `At ${portion.toFixed(1)}× portion, this equals ${calories} calories and requires ${runMins} minutes of running to burn off.`;
+        }
+
+        if (portionFeedback) {
+            portionFeedback.className = `mt-3 p-3 rounded ${bgClass}`;
+        }
+        if (portionText) {
+            portionText.innerHTML = `<i class="fa ${iconClass} me-2"></i>${message}`;
+        }
+    }
+
+    function updateAllNutritionUI(nutrition) {
+        // Update base nutrition data
+        baseNutrition.calories = nutrition.calories;
+        baseNutrition.protein = parseInt(nutrition.macros.protein);
+        baseNutrition.carbs = parseInt(nutrition.macros.carbs);
+        baseNutrition.fats = parseInt(nutrition.macros.fat);
+        baseNutrition.fiber = parseInt(nutrition.macros.fiber);
+        baseNutrition.runMins = nutrition.burn_off.run_mins;
+        baseNutrition.yogaRounds = nutrition.burn_off.yoga_rounds;
+        baseNutrition.ecoScore = nutrition.eco_score;
+        baseNutrition.sustainability = nutrition.sustainability;
+        baseNutrition.servingSize = nutrition.serving_size;
+
+        // Update all UI elements
+        updateNutritionValues(
+            nutrition.calories,
+            parseInt(nutrition.macros.protein),
+            parseInt(nutrition.macros.carbs),
+            parseInt(nutrition.macros.fat),
+            parseInt(nutrition.macros.fiber),
+            nutrition.burn_off.run_mins,
+            nutrition.burn_off.yoga_rounds
+        );
+
+        // Update eco score
+        const quickEcoScore = document.getElementById('quickEcoScore');
+        if (quickEcoScore) quickEcoScore.textContent = nutrition.eco_score + '/10';
+
+        // Update serving size
+        const servingSize = document.getElementById('servingSize');
+        if (servingSize) servingSize.textContent = nutrition.serving_size;
+    }
+
+    // ========================================
+    // RADAR CHART - MACRO BALANCE VISUALIZATION
+    // ========================================
+    let macroRadarChart = null;
+    let chartInitialized = false;
+
+    function initializeRadarChart() {
+        if (chartInitialized) {
+            return;
+        }
+
+        const ctx = document.getElementById('macroRadarChart');
+        if (!ctx) {
+            console.error('Canvas element not found');
+            return;
+        }
+
+        // Check if Chart.js is loaded
+        if (typeof Chart === 'undefined') {
+            setTimeout(initializeRadarChart, 200);
+            return;
+        }
+
+        // Validate nutrition data
+        if (!baseNutrition.protein || baseNutrition.protein === 0) {
+            console.warn('No nutrition data available');
+            return;
+        }
+
+        // Calculate ideal balanced meal (based on standard macro ratios)
+        // Ideal: 30% protein, 40% carbs, 30% fat (in grams for 500 kcal meal)
+        const idealProtein = 38;  // ~30% of 500 kcal
+        const idealCarbs = 50;    // ~40% of 500 kcal
+        const idealFats = 17;     // ~30% of 500 kcal
+
+        // Current meal macros
+        const currentProtein = parseFloat(baseNutrition.protein) || 0;
+        const currentCarbs = parseFloat(baseNutrition.carbs) || 0;
+        const currentFats = parseFloat(baseNutrition.fats) || 0;
+
+        // Create radar chart with error handling
+        try {
+            macroRadarChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['Protein (g)', 'Carbohydrates (g)', 'Fats (g)'],
+                    datasets: [
+                        {
+                            label: 'This Meal',
+                            data: [currentProtein, currentCarbs, currentFats],
+                            backgroundColor: 'rgba(254, 161, 22, 0.3)',  // Orange with transparency
+                            borderColor: 'rgba(254, 161, 22, 1)',        // Solid orange
+                            borderWidth: 2,
+                            pointBackgroundColor: 'rgba(254, 161, 22, 1)',
+                            pointBorderColor: '#fff',
+                            pointHoverBackgroundColor: '#fff',
+                            pointHoverBorderColor: 'rgba(254, 161, 22, 1)',
+                            pointRadius: 5,
+                            pointHoverRadius: 7
+                        },
+                        {
+                            label: 'Ideal Balanced Meal',
+                            data: [idealProtein, idealCarbs, idealFats],
+                            backgroundColor: 'rgba(15, 23, 43, 0.05)',   // Very light fill
+                            borderColor: 'rgba(15, 23, 43, 0.8)',        // Dark blue outline
+                            borderWidth: 2,
+                            borderDash: [5, 5],  // Dashed line
+                            pointBackgroundColor: 'rgba(15, 23, 43, 0.8)',
+                            pointBorderColor: '#fff',
+                            pointHoverBackgroundColor: '#fff',
+                            pointHoverBorderColor: 'rgba(15, 23, 43, 0.8)',
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeInOutQuart'
+                    },
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            max: Math.max(currentProtein, currentCarbs, currentFats, idealProtein, idealCarbs, idealFats) * 1.2,
+                            ticks: {
+                                stepSize: 10,
+                                font: {
+                                    size: 11
+                                }
+                            },
+                            pointLabels: {
+                                font: {
+                                    size: 13,
+                                    weight: 'bold'
+                                },
+                                color: '#0F172B'
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            angleLines: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                font: {
+                                    size: 12,
+                                    weight: 'bold'
+                                },
+                                padding: 15,
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            titleFont: {
+                                size: 14,
+                                weight: 'bold'
+                            },
+                            bodyFont: {
+                                size: 13
+                            },
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += context.parsed.r + 'g';
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            chartInitialized = true;
+            console.log('Radar chart initialized successfully');
+        } catch (error) {
+            console.error('Error initializing radar chart:', error);
+        }
+    }
+
+    function updateRadarChart(protein, carbs, fats) {
+        if (!macroRadarChart) return;
+
+        // Update "This Meal" dataset
+        macroRadarChart.data.datasets[0].data = [protein, carbs, fats];
+
+        // Update scale max
+        const maxValue = Math.max(protein, carbs, fats, 38, 50, 17) * 1.2;
+        macroRadarChart.options.scales.r.max = maxValue;
+
+        // Update chart without animation (for live updates)
+        macroRadarChart.update('none');
+    }
+
+    // ========================================
+    // INTERACTIVE MACRO LAB
+    // ========================================
+    const proteinSlider = document.getElementById('proteinSlider');
+    const carbsSlider = document.getElementById('carbsSlider');
+    const fatsSlider = document.getElementById('fatsSlider');
+    const proteinValue = document.getElementById('proteinValue');
+    const carbsValue = document.getElementById('carbsValue');
+    const fatsValue = document.getElementById('fatsValue');
+    const macroCalories = document.getElementById('macroCalories');
+    const macroRatio = document.getElementById('macroRatio');
+    const resetMacrosBtn = document.getElementById('resetMacrosBtn');
+
+    // Store original values for reset
+    const originalMacros = {
+        protein: baseNutrition.protein,
+        carbs: baseNutrition.carbs,
+        fats: baseNutrition.fats
+    };
+
+    function updateMacroFeedback(protein, carbs, fats) {
+        // Calculate calories (Protein: 4 kcal/g, Carbs: 4 kcal/g, Fats: 9 kcal/g)
+        const calories = Math.round((protein * 4) + (carbs * 4) + (fats * 9));
+
+        // Calculate ratio (simplified to whole numbers)
+        const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+        const gcdAll = [protein, carbs, fats].reduce((a, b) => gcd(a, b));
+        const ratioP = gcdAll > 0 ? Math.round(protein / gcdAll) : protein;
+        const ratioC = gcdAll > 0 ? Math.round(carbs / gcdAll) : carbs;
+        const ratioF = gcdAll > 0 ? Math.round(fats / gcdAll) : fats;
+
+        // Update display
+        if (macroCalories) macroCalories.textContent = calories + ' kcal';
+        if (macroRatio) macroRatio.textContent = `P:C:F = ${ratioP}:${ratioC}:${ratioF}`;
+
+        // Check for macro imbalance (>60% of total calories from one macro)
+        const proteinCals = protein * 4;
+        const carbsCals = carbs * 4;
+        const fatsCals = fats * 9;
+        const totalCals = proteinCals + carbsCals + fatsCals;
+
+        const imbalanceWarning = document.getElementById('imbalanceWarning');
+        const imbalanceText = document.getElementById('imbalanceText');
+
+        if (totalCals > 0 && imbalanceWarning && imbalanceText) {
+            const proteinPct = (proteinCals / totalCals) * 100;
+            const carbsPct = (carbsCals / totalCals) * 100;
+            const fatsPct = (fatsCals / totalCals) * 100;
+
+            if (proteinPct > 60) {
+                imbalanceWarning.style.display = 'inline-block';
+                imbalanceWarning.className = 'badge bg-primary text-white me-2';
+                imbalanceText.textContent = 'High Protein';
+            } else if (carbsPct > 60) {
+                imbalanceWarning.style.display = 'inline-block';
+                imbalanceWarning.className = 'badge bg-warning text-dark me-2';
+                imbalanceText.textContent = 'High Carbs';
+            } else if (fatsPct > 60) {
+                imbalanceWarning.style.display = 'inline-block';
+                imbalanceWarning.className = 'badge bg-danger text-white me-2';
+                imbalanceText.textContent = 'High Fat';
+            } else {
+                imbalanceWarning.style.display = 'none';
+            }
+        }
+
+        // Update radar chart
+        updateRadarChart(protein, carbs, fats);
+    }
+
+    // Protein slider event
+    if (proteinSlider) {
+        proteinSlider.addEventListener('input', function() {
+            const value = parseInt(this.value);
+            if (proteinValue) proteinValue.textContent = value + 'g';
+
+            const currentCarbs = carbsSlider ? parseInt(carbsSlider.value) : originalMacros.carbs;
+            const currentFats = fatsSlider ? parseInt(fatsSlider.value) : originalMacros.fats;
+            updateMacroFeedback(value, currentCarbs, currentFats);
+        });
+    }
+
+    // Carbs slider event
+    if (carbsSlider) {
+        carbsSlider.addEventListener('input', function() {
+            const value = parseInt(this.value);
+            if (carbsValue) carbsValue.textContent = value + 'g';
+
+            const currentProtein = proteinSlider ? parseInt(proteinSlider.value) : originalMacros.protein;
+            const currentFats = fatsSlider ? parseInt(fatsSlider.value) : originalMacros.fats;
+            updateMacroFeedback(currentProtein, value, currentFats);
+        });
+    }
+
+    // Fats slider event
+    if (fatsSlider) {
+        fatsSlider.addEventListener('input', function() {
+            const value = parseInt(this.value);
+            if (fatsValue) fatsValue.textContent = value + 'g';
+
+            const currentProtein = proteinSlider ? parseInt(proteinSlider.value) : originalMacros.protein;
+            const currentCarbs = carbsSlider ? parseInt(carbsSlider.value) : originalMacros.carbs;
+            updateMacroFeedback(currentProtein, currentCarbs, value);
+        });
+    }
+
+    // Reset button event
+    if (resetMacrosBtn) {
+        resetMacrosBtn.addEventListener('click', function() {
+            if (proteinSlider) proteinSlider.value = originalMacros.protein;
+            if (carbsSlider) carbsSlider.value = originalMacros.carbs;
+            if (fatsSlider) fatsSlider.value = originalMacros.fats;
+
+            if (proteinValue) proteinValue.textContent = originalMacros.protein + 'g';
+            if (carbsValue) carbsValue.textContent = originalMacros.carbs + 'g';
+            if (fatsValue) fatsValue.textContent = originalMacros.fats + 'g';
+
+            updateMacroFeedback(originalMacros.protein, originalMacros.carbs, originalMacros.fats);
+        });
+    }
+
+    // ========================================
+    // TAB ACTIVATION - LAZY LOAD CHART
+    // ========================================
+    const nutritionTab = document.getElementById('nutrition-tab');
+    if (nutritionTab) {
+        nutritionTab.addEventListener('shown.bs.tab', function() {
+            console.log('Nutrition Lab tab activated');
+            // Initialize chart only when Nutrition Lab tab is opened
+            if (!chartInitialized) {
+                setTimeout(initializeRadarChart, 300); // Increased delay for Chart.js to load
+            }
+        });
+    }
+
+    // ========================================
+    // INITIALIZE
+    // ========================================
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM Content Loaded');
+
+        // Set initial portion feedback
+        if (portionSlider && portionFeedback) {
+            updatePortionFeedback(currentPortion, baseNutrition.calories, baseNutrition.runMins);
+        }
+
+        // If Nutrition Lab tab is active on page load, initialize chart
+        const nutritionPane = document.getElementById('nutrition');
+        if (nutritionPane && nutritionPane.classList.contains('active')) {
+            console.log('Nutrition Lab tab is active on load');
+            setTimeout(initializeRadarChart, 500); // Wait for Chart.js to load
+        }
+    });
+
+    // Fallback: Initialize chart when window is fully loaded (including all scripts)
+    window.addEventListener('load', function() {
+        console.log('Window fully loaded');
+        // Check if we're on Nutrition Lab tab and chart not initialized
+        const nutritionPane = document.getElementById('nutrition');
+        if (nutritionPane && nutritionPane.classList.contains('active') && !chartInitialized) {
+            console.log('Initializing chart on window load');
+            setTimeout(initializeRadarChart, 200);
+        }
+    });
+
+
 </script>
 {% endblock %}
 

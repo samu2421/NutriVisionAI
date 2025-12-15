@@ -176,6 +176,67 @@ Provide exactly 2 practical ideas, one per line. Each idea should be under 20 wo
                     "Reheat thoroughly before consuming."
                 ]
 
+    def generate_ai_insights(self, food_name: str, nutrition_data: Dict[str, Any]) -> str:
+        """
+        Generate structured AI insights grounded in food_data.json
+
+        Args:
+            food_name: Name of the food
+            nutrition_data: Nutrition data from FoodDataManager
+
+        Returns:
+            Structured insights (max 60 words)
+        """
+        if not self.client:
+            # Fallback to structured static insights
+            description = nutrition_data.get('description', '')
+            macros = nutrition_data.get('macros', {})
+            sustainability = nutrition_data.get('sustainability', 'Medium')
+
+            protein = macros.get('protein', '0g')
+            carbs = macros.get('carbs', '0g')
+
+            return f"{food_name.replace('_', ' ').title()}: {description[:80]}... Macros: {protein} protein, {carbs} carbs. Sustainability: {sustainability} impact."
+
+        try:
+            # Structured prompt grounded in JSON data
+            description = nutrition_data.get('description', 'Traditional Indian food')
+            macros = nutrition_data.get('macros', {})
+            sustainability = nutrition_data.get('sustainability', 'Medium')
+            flavor_profile = nutrition_data.get('flavor_profile', 'Savory')
+
+            prompt = f"""Provide 3 bullet points about {food_name.replace('_', ' ')} based ONLY on this data:
+- Description: {description}
+- Macros: {macros}
+- Sustainability: {sustainability}
+- Flavor: {flavor_profile}
+
+Format:
+• [Health aspect]
+• [Cultural aspect]
+• [Sustainability aspect]
+
+Max 60 words total. Be specific and factual."""
+
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": "You are a nutrition expert. Provide concise, factual insights based only on given data. No hallucination."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=150,
+                temperature=0.3
+            )
+
+            insights = response.choices[0].message.content.strip()
+            return insights if insights else f"{food_name.replace('_', ' ').title()} is a traditional Indian food with unique nutritional properties."
+
+        except Exception as e:
+            print(f"Error generating AI insights: {e}")
+            # Fallback to structured static insights
+            description = nutrition_data.get('description', '')
+            return f"{food_name.replace('_', ' ').title()}: {description[:100]}"
+
     def generate_complete_analysis(self, food_name: str, nutrition_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Generate complete AI-powered analysis
@@ -191,7 +252,9 @@ Provide exactly 2 practical ideas, one per line. Each idea should be under 20 wo
             return {
                 'cultural_explanation': 'Data not available',
                 'sustainability_explanation': 'Data not available',
-                'leftover_ideas': ['Data not available', 'Data not available']
+                'leftover_ideas': ['Data not available', 'Data not available'],
+                'flavor_pairing': 'Data not available',
+                'ai_insights': 'Data not available'
             }
 
         # Generate each component
@@ -211,10 +274,18 @@ Provide exactly 2 practical ideas, one per line. Each idea should be under 20 wo
             nutrition_data.get('leftover_ideas', 'Data not available')
         )
 
+        # Get flavor pairing from JSON (with fallback)
+        flavor_pairing = nutrition_data.get('pairing', 'Pairs well with traditional accompaniments')
+
+        # Generate structured AI insights
+        ai_insights = self.generate_ai_insights(food_name, nutrition_data)
+
         return {
             'cultural_explanation': cultural_exp,
             'sustainability_explanation': sustainability_exp,
-            'leftover_ideas': leftover_ideas
+            'leftover_ideas': leftover_ideas,
+            'flavor_pairing': flavor_pairing,
+            'ai_insights': ai_insights
         }
 
     def _call_api(self, system_prompt: str, user_prompt: str, max_tokens: int = 150) -> str:
