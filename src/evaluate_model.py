@@ -12,7 +12,7 @@ from tqdm import tqdm
 from src.predict import load_predictor
 
 
-def evaluate_model(validation_dir='data/validation', output_file='evaluation_results.json'):
+def evaluate_model(validation_dir='data/processed/val', output_file='evaluation_results.json'):
     """
     Evaluate model on validation set and compute metrics
     
