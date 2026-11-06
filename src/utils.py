@@ -109,7 +109,8 @@ class FoodDataManager:
             'description': description,
             'leftover_ideas': leftover_ideas,
             'flavor_profile': flavor_profile,
-            'pairing': pairing
+            'pairing': pairing,
+            'dietary_tags': self.get_dietary_filters(food_name)
         }
     
     def calculate_burn_off(self, calories: int) -> Dict[str, int]:
@@ -159,7 +160,7 @@ class FoodDataManager:
             food_name: Name of the food item
 
         Returns:
-            List of dietary tags (e.g., ['vegetarian', 'high_protein'])
+            List of dietary tags (e.g., ['high_protein', 'low_fat'])
         """
         food_info = self.get_food_info(food_name)
 
@@ -167,9 +168,6 @@ class FoodDataManager:
             return []
 
         tags = []
-
-        # All items in our dataset are vegetarian (Indian food focus)
-        tags.append('vegetarian')
 
         # Check macros for classification
         macros = food_info.get('macros', {})

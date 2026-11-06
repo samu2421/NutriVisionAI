@@ -9,6 +9,10 @@ from pathlib import Path
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
+from dotenv import load_dotenv
+
+# Load .env before reading any configuration from the environment
+load_dotenv()
 
 # Import our modules
 from src.predict import load_predictor
@@ -27,7 +31,7 @@ from src.demo_config import (
 app = Flask(__name__)
 
 # Configuration
-app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(16))
+app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY') or secrets.token_hex(16)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
@@ -444,5 +448,7 @@ if __name__ == '__main__':
     print("Starting server on http://127.0.0.1:5001")
     print("="*60)
 
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    # Debug mode (interactive debugger) only when explicitly enabled; local-only binding
+    debug = os.getenv('FLASK_DEBUG', 'False').strip().lower() in ('1', 'true', 'yes', 'on')
+    app.run(debug=debug, host='127.0.0.1', port=5001)
 

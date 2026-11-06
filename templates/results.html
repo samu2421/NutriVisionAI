@@ -118,7 +118,7 @@
         {% if result.get('is_demo') %}
         <div class="alert alert-info wow fadeInUp" data-wow-delay="0.05s">
             <h5><i class="fa fa-info-circle text-info me-2"></i>Demo Mode</h5>
-            <p class="mb-0">You are viewing a demo analysis. This uses pre-loaded data without model inference.
+            <p class="mb-0">You are viewing a demo analysis. The predictions shown were precomputed by the model on this image (with TTA); no model runs live on this page.
             {% if demo_foods %}
             Try other demo foods:
             {% for food in demo_foods %}
@@ -173,7 +173,7 @@
                         <div class="result-card bg-white wow fadeInUp" data-wow-delay="0.1s" style="position: relative;">
                             <h4 class="mb-3"><i class="fa fa-image text-primary me-2"></i>Uploaded Image</h4>
                             <div style="position: relative;">
-                                <img src="{{ url_for('static', filename='uploads/' + result.image_path) }}"
+                                <img src="{{ url_for('static', filename=(result.image_path if result.get('is_demo') else 'uploads/' + result.image_path)) }}"
                                      class="food-image" alt="Food Image" id="foodImage">
                                 <!-- Confidence Badge Overlay -->
                                 <div id="imageConfidenceBadge" style="position: absolute; top: 10px; right: 10px;">
@@ -745,7 +745,6 @@
         protein: {{ result.nutrition.macros.protein|replace('g', '') if result.nutrition.status == 'success' else 0 }},
         carbs: {{ result.nutrition.macros.carbs|replace('g', '') if result.nutrition.status == 'success' else 0 }},
         fats: {{ result.nutrition.macros.fat|replace('g', '') if result.nutrition.status == 'success' else 0 }},
-        fiber: {{ result.nutrition.macros.fiber|replace('g', '') if result.nutrition.status == 'success' and result.nutrition.macros.fiber else 0 }},
         runMins: {{ result.nutrition.burn_off.run_mins if result.nutrition.status == 'success' else 0 }},
         yogaRounds: {{ result.nutrition.burn_off.yoga_rounds if result.nutrition.status == 'success' else 0 }},
         ecoScore: {{ result.nutrition.eco_score if result.nutrition.status == 'success' else 0 }},
@@ -1164,12 +1163,11 @@
             const scaledProtein = Math.round(baseNutrition.protein * newPortion);
             const scaledCarbs = Math.round(baseNutrition.carbs * newPortion);
             const scaledFats = Math.round(baseNutrition.fats * newPortion);
-            const scaledFiber = Math.round(baseNutrition.fiber * newPortion);
             const scaledRunMins = Math.round(baseNutrition.runMins * newPortion);
             const scaledYogaRounds = Math.round(baseNutrition.yogaRounds * newPortion);
 
             // Update UI elements
-            updateNutritionValues(scaledCalories, scaledProtein, scaledCarbs, scaledFats, scaledFiber, scaledRunMins, scaledYogaRounds);
+            updateNutritionValues(scaledCalories, scaledProtein, scaledCarbs, scaledFats, scaledRunMins, scaledYogaRounds);
 
             // Update portion feedback with color coding
             updatePortionFeedback(newPortion, scaledCalories, scaledRunMins);
@@ -1179,7 +1177,7 @@
         });
     }
 
-    function updateNutritionValues(calories, protein, carbs, fats, fiber, runMins, yogaRounds) {
+    function updateNutritionValues(calories, protein, carbs, fats, runMins, yogaRounds) {
         // Update Quick Stats (Overview Tab)
         const quickCalories = document.getElementById('quickCalories');
         const quickProtein = document.getElementById('quickProtein');
@@ -1191,13 +1189,11 @@
         const tableProtein = document.getElementById('tableProtein');
         const tableCarbs = document.getElementById('tableCarbs');
         const tableFats = document.getElementById('tableFats');
-        const tableFiber = document.getElementById('tableFiber');
 
         if (tableCalories) tableCalories.textContent = calories + ' kcal';
         if (tableProtein) tableProtein.textContent = protein + 'g';
         if (tableCarbs) tableCarbs.textContent = carbs + 'g';
         if (tableFats) tableFats.textContent = fats + 'g';
-        if (tableFiber) tableFiber.textContent = fiber + 'g';
 
         // Update Burn-off Activities
         const runMinsEl = document.getElementById('runMins');
@@ -1248,7 +1244,6 @@
         baseNutrition.protein = parseInt(nutrition.macros.protein);
         baseNutrition.carbs = parseInt(nutrition.macros.carbs);
         baseNutrition.fats = parseInt(nutrition.macros.fat);
-        baseNutrition.fiber = parseInt(nutrition.macros.fiber);
         baseNutrition.runMins = nutrition.burn_off.run_mins;
         baseNutrition.yogaRounds = nutrition.burn_off.yoga_rounds;
         baseNutrition.ecoScore = nutrition.eco_score;
@@ -1261,7 +1256,6 @@
             parseInt(nutrition.macros.protein),
             parseInt(nutrition.macros.carbs),
             parseInt(nutrition.macros.fat),
-            parseInt(nutrition.macros.fiber),
             nutrition.burn_off.run_mins,
             nutrition.burn_off.yoga_rounds
         );
