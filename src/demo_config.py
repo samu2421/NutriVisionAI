@@ -21,61 +21,68 @@ DEMO_IMAGES = {
 # Default demo food if model not available
 DEFAULT_DEMO_FOOD = 'samosa'
 
-# Demo prediction results (for when model is not available)
+# Precomputed predictions shown on /demo.
+# Real model output: efficientnet_b1_indian.pth with TTA, run on the
+# static/demo_images/demo_<class>.jpg files themselves (validation-set images).
 DEMO_PREDICTIONS = {
     'samosa': {
         'predicted_class': 'samosa',
-        'confidence': 0.92,
+        'confidence': 0.9933,
         'all_predictions': [
-            ('samosa', 0.92),
-            ('pakode', 0.05),
-            ('kaathi_rolls', 0.02)
+            ('samosa', 0.9933),
+            ('kulfi', 0.0035),
+            ('momos', 0.0009)
         ],
         'low_confidence_warning': False,
+        'tta_used': True,
         'demo_mode': True
     },
     'idli': {
         'predicted_class': 'idli',
-        'confidence': 0.95,
+        'confidence': 0.9963,
         'all_predictions': [
-            ('idli', 0.95),
-            ('dhokla', 0.03),
-            ('masala_dosa', 0.01)
+            ('idli', 0.9963),
+            ('chole_bhature', 0.0029),
+            ('masala_dosa', 0.0006)
         ],
         'low_confidence_warning': False,
+        'tta_used': True,
         'demo_mode': True
     },
     'masala_dosa': {
         'predicted_class': 'masala_dosa',
-        'confidence': 0.88,
+        'confidence': 0.9982,
         'all_predictions': [
-            ('masala_dosa', 0.88),
-            ('idli', 0.07),
-            ('fried_rice', 0.03)
+            ('masala_dosa', 0.9982),
+            ('idli', 0.0008),
+            ('kadai_paneer', 0.0004)
         ],
         'low_confidence_warning': False,
+        'tta_used': True,
         'demo_mode': True
     },
     'chole_bhature': {
         'predicted_class': 'chole_bhature',
-        'confidence': 0.91,
+        'confidence': 0.9984,
         'all_predictions': [
-            ('chole_bhature', 0.91),
-            ('pav_bhaji', 0.05),
-            ('butter_naan', 0.02)
+            ('chole_bhature', 0.9984),
+            ('butter_naan', 0.0011),
+            ('pakode', 0.0001)
         ],
         'low_confidence_warning': False,
+        'tta_used': True,
         'demo_mode': True
     },
     'pav_bhaji': {
         'predicted_class': 'pav_bhaji',
-        'confidence': 0.89,
+        'confidence': 0.9768,
         'all_predictions': [
-            ('pav_bhaji', 0.89),
-            ('chole_bhature', 0.06),
-            ('kadai_paneer', 0.03)
+            ('pav_bhaji', 0.9768),
+            ('chole_bhature', 0.0161),
+            ('samosa', 0.0019)
         ],
         'low_confidence_warning': False,
+        'tta_used': True,
         'demo_mode': True
     }
 }

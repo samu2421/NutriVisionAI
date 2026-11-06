@@ -67,8 +67,11 @@ def prepare_data_splits(raw_data_dir, processed_dir, val_split=0.2, random_state
     train_dir = Path(processed_dir) / 'train'
     val_dir = Path(processed_dir) / 'val'
     
-    # Check if already processed
-    if len(list(train_dir.glob('*'))) > 0 and len(list(val_dir.glob('*'))) > 0:
+    # Check if already processed (ignore dotfiles such as .gitkeep and .DS_Store)
+    def has_entries(directory):
+        return directory.exists() and any(not p.name.startswith('.') for p in directory.iterdir())
+
+    if has_entries(train_dir) and has_entries(val_dir):
         print("Data already split. Using existing train/val directories.")
         return
     

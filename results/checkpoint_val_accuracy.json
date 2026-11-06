@@ -1,0 +1,35 @@
+{
+  "description": "Validation accuracy (%) stored in the saved training checkpoints",
+  "checkpoints": [
+    {
+      "epoch": 5,
+      "val_accuracy": 80.57553956834532,
+      "file": "models/checkpoints/checkpoint_epoch_5.pth",
+      "saved_best_model": false
+    },
+    {
+      "epoch": 10,
+      "val_accuracy": 81.4748201438849,
+      "file": "models/checkpoints/checkpoint_epoch_10.pth",
+      "saved_best_model": false
+    },
+    {
+      "epoch": 12,
+      "val_accuracy": 82.55395683453237,
+      "file": "models/efficientnet_b1_indian.pth",
+      "saved_best_model": true
+    },
+    {
+      "epoch": 15,
+      "val_accuracy": 81.29496402877697,
+      "file": "models/checkpoints/checkpoint_epoch_15.pth",
+      "saved_best_model": false
+    },
+    {
+      "epoch": 20,
+      "val_accuracy": 81.92446043165468,
+      "file": "models/checkpoints/checkpoint_epoch_20.pth",
+      "saved_best_model": false
+    }
+  ]
+}

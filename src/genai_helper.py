@@ -3,9 +3,15 @@ NutriVision AI - GenAI Integration Module
 Handles AI-powered explanations using Groq/OpenAI APIs
 """
 
+import logging
 import os
 from typing import Dict, Any, Optional
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# Groq retires models regularly; override with GROQ_MODEL in .env
+DEFAULT_GROQ_MODEL = 'qwen/qwen3.8-27b'
 
 
 class GenAIHelper:
@@ -19,6 +25,12 @@ class GenAIHelper:
             api_provider: 'groq' or 'openai'
             api_key: API key (if None, loads from environment)
         """
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()  # API keys and GROQ_MODEL
+        except ImportError:
+            pass
+
         self.api_provider = api_provider.lower()
         self.api_key = api_key or self._load_api_key()
         self.client = None
@@ -27,13 +39,7 @@ class GenAIHelper:
             self._initialize_client()
     
     def _load_api_key(self) -> Optional[str]:
-        """Load API key from environment variables"""
-        try:
-            from dotenv import load_dotenv
-            load_dotenv()
-        except ImportError:
-            pass
-        
+        """Load API key from environment variables (.env is loaded in __init__)"""
         if self.api_provider == 'groq':
             return os.getenv('GROQ_API_KEY')
         elif self.api_provider == 'openai':
@@ -47,7 +53,7 @@ class GenAIHelper:
             if self.api_provider == 'groq':
                 from groq import Groq
                 self.client = Groq(api_key=self.api_key)
-                self.model = 'llama-3.1-70b-versatile'
+                self.model = os.getenv('GROQ_MODEL') or DEFAULT_GROQ_MODEL
             elif self.api_provider == 'openai':
                 from openai import OpenAI
                 self.client = OpenAI(api_key=self.api_key)
@@ -86,8 +92,7 @@ Provide a brief explanation (max 50 words) covering cultural importance or Ayurv
         try:
             response = self._call_api(system_prompt, user_prompt, max_tokens=100)
             return response.strip()
-        except Exception as e:
-            print(f"GenAI error: {e}")
+        except Exception:  # already logged in _call_api
             return base_description
     
     def generate_sustainability_explanation(self, food_name: str, 
@@ -119,8 +124,7 @@ Provide a brief explanation (max 60 words) about its carbon footprint, water usa
         try:
             response = self._call_api(system_prompt, user_prompt, max_tokens=120)
             return response.strip()
-        except Exception as e:
-            print(f"GenAI error: {e}")
+        except Exception:  # already logged in _call_api
             return f"This food has {sustainability_level.lower()} environmental impact (Eco Score: {eco_score}/10)."
     
     def generate_leftover_ideas(self, food_name: str, base_ideas: str) -> list:
@@ -166,8 +170,7 @@ Provide exactly 2 practical ideas, one per line. Each idea should be under 20 wo
                 return [ideas[0], "Store in airtight container and reheat within 24 hours."]
             else:
                 return [base_ideas, "Store in airtight container and reheat within 24 hours."]
-        except Exception as e:
-            print(f"GenAI error: {e}")
+        except Exception:  # already logged in _call_api
             if base_ideas and base_ideas != "Data not available":
                 return [base_ideas, "Store in airtight container and reheat within 24 hours."]
             else:
@@ -218,21 +221,15 @@ Format:
 
 Max 60 words total. Be specific and factual."""
 
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {"role": "system", "content": "You are a nutrition expert. Provide concise, factual insights based only on given data. No hallucination."},
-                    {"role": "user", "content": prompt}
-                ],
+            insights = self._call_api(
+                "You are a nutrition expert. Provide concise, factual insights based only on given data. No hallucination.",
+                prompt,
                 max_tokens=150,
                 temperature=0.3
-            )
-
-            insights = response.choices[0].message.content.strip()
+            ).strip()
             return insights if insights else f"{food_name.replace('_', ' ').title()} is a traditional Indian food with unique nutritional properties."
 
-        except Exception as e:
-            print(f"Error generating AI insights: {e}")
+        except Exception:  # already logged in _call_api
             # Fallback to structured static insights
             description = nutrition_data.get('description', '')
             return f"{food_name.replace('_', ' ').title()}: {description[:100]}"
@@ -288,7 +285,8 @@ Max 60 words total. Be specific and factual."""
             'ai_insights': ai_insights
         }
 
-    def _call_api(self, system_prompt: str, user_prompt: str, max_tokens: int = 150) -> str:
+    def _call_api(self, system_prompt: str, user_prompt: str, max_tokens: int = 150,
+                  temperature: float = 0.7) -> str:
         """
         Call the GenAI API
 
@@ -296,36 +294,42 @@ Max 60 words total. Be specific and factual."""
             system_prompt: System instruction
             user_prompt: User query
             max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature
 
         Returns:
             Generated text
+
+        Raises:
+            Exception: on any API failure, after logging it; callers fall back
+            to static text.
         """
         if not self.is_available():
             raise Exception("GenAI client not available")
+        if self.api_provider not in ('groq', 'openai'):
+            raise Exception(f"Unsupported API provider: {self.api_provider}")
 
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ]
 
-        if self.api_provider == 'groq':
+        try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 max_tokens=max_tokens,
-                temperature=0.7
+                temperature=temperature
             )
-        elif self.api_provider == 'openai':
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=0.7
-            )
-        else:
-            raise Exception(f"Unsupported API provider: {self.api_provider}")
+        except Exception as e:
+            logger.warning("GenAI call failed (provider=%s, model=%s): %s: %s",
+                           self.api_provider, self.model, type(e).__name__, e)
+            raise
 
-        return response.choices[0].message.content
+        content = response.choices[0].message.content or ''
+        if not content.strip():
+            logger.warning("GenAI call returned empty content (provider=%s, model=%s)",
+                           self.api_provider, self.model)
+        return content
 
 
 def load_genai_helper(api_provider='groq', api_key=None) -> GenAIHelper:

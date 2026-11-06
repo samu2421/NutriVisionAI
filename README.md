@@ -1,414 +1,174 @@
-# NutriVision AI
+# NutriVision AI — Indian Food Recognition and Nutrition Analysis
 
-**Intelligent Food Recognition and Nutritional Analysis System for Indian Cuisine**
+A Flask web app that recognises 18 Indian dishes from a photo and turns the prediction into nutrition information: calories and macronutrients, a portion slider, activity needed to burn the calories, an eco score, and short AI-generated notes on the dish. The image classifier is an EfficientNet-B1 fine-tuned with PyTorch.
 
-A production-ready web application that combines computer vision (EfficientNet-B1), structured nutrition databases, and large language models to provide comprehensive food analysis including calorie estimation, macro-nutrient breakdown, sustainability scoring, and culturally-aware recipe suggestions.
+Individual project for the module Data Analytics 3: Deep Learning, MSc Applied Data Science and Analytics, SRH University of Applied Sciences Heidelberg (Hamburg campus), December 2025.
 
----
+## At a glance
 
-## 🚀 Quick Start
+| | |
+|---|---|
+| **Task** | Image classification, 18 classes of Indian food |
+| **Model** | EfficientNet-B1 pretrained on ImageNet; backbone frozen, new classification head trained |
+| **Data** | 5,524 images: 4,412 training / 1,112 validation (stratified 80/20 split, seed 42) |
+| **Result** | 83.5% top-1 and 93.3% top-3 accuracy, macro F1 0.83 on the 1,112 validation images (with test-time augmentation) |
+| **Stack** | Python, PyTorch, torchvision, Albumentations, scikit-learn, Flask, Jinja2, Bootstrap, Chart.js, Groq API |
+| **Status** | Runs locally; not deployed |
+
+## Results
+
+| Metric (validation set, n = 1,112) | Value |
+|---|---|
+| Top-1 accuracy | 83.54% |
+| Top-3 accuracy | 93.26% |
+| Macro precision / recall / F1 | 0.838 / 0.827 / 0.830 |
+| Average prediction confidence | 0.76 |
+
+These numbers come from `src/evaluate_model.py` using the app's inference pipeline with test-time augmentation; the raw output, including the full confusion matrix, is in `evaluation_results.json`. Without test-time augmentation, using the training pipeline, the saved model reaches 82.55% on the same images.
+
+There is no separate test set: the validation images were also used to select the best training epoch, so these figures are likely slightly optimistic.
+
+![Confusion matrix on the validation set](confusion_matrix.png)
+
+![Validation accuracy at saved checkpoints](training_curves.png)
+
+The model was trained for 20 epochs. Validation accuracy was already 80.6% after epoch 5 and peaked at 82.6% at epoch 12, which is the saved model (`results/checkpoint_val_accuracy.json`).
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["Photo upload"] --> B["Preprocessing<br/>resize + centre crop 224 px"]
+    B --> C["EfficientNet-B1<br/>original + flipped image<br/>(test-time augmentation)"]
+    C --> D["Top-3 predictions<br/>with confidence"]
+    D --> E["Nutrition data<br/>data/food_data.json"]
+    D --> F["AI notes via Groq API<br/>(static fallback text)"]
+    E --> G["Results page<br/>Flask + Jinja2 + Chart.js"]
+    F --> G
+```
+
+1. **Classification.** The uploaded image is resized (shortest side 256 px) and centre-cropped to 224 × 224, so its aspect ratio is kept. The model predicts on the original and a horizontally flipped copy and averages the outputs. Predictions below 60% confidence are flagged in the interface, and the user can switch to one of the other top-3 classes.
+2. **Nutrition.** Calories, protein, carbohydrates and fat per serving, eco score, dietary tags and burn-off activities come from a curated JSON file and are rescaled by the portion slider (0.5× to 3×).
+3. **AI notes.** A Groq-hosted LLM writes a cultural note, a sustainability explanation, leftover ideas and short insights. If the API is unavailable, the app falls back to static text from the JSON file. Flavour pairings always come from the JSON file. The interface loads its JavaScript libraries and fonts from CDNs, so it needs an internet connection.
+
+## Features
+
+- Upload page and results dashboard with top-3 predictions and confidence
+- Interactive macronutrient radar chart and portion slider (Chart.js)
+- Switching to another top-3 class when the prediction is wrong
+- Meal-time suggestions (breakfast, lunch, dinner) and burn-off estimates
+- Eco score with a short sustainability explanation
+- Demo page with precomputed predictions for five validation images
+
+## Model and training
+
+| Setting | Value |
+|---|---|
+| Architecture | torchvision `efficientnet_b1` (ImageNet weights); classifier replaced by Dropout(0.2) + Linear(1280 → 18) |
+| Trainable parameters | Classification head only (backbone frozen) |
+| Training augmentation | Random 90° rotation, horizontal flip, brightness/contrast (Albumentations), resize to 224 × 224 |
+| Optimiser | Adam, learning rate 0.001, batch size 32, cross-entropy loss |
+| Epochs | 20; best checkpoint by validation accuracy (epoch 12) |
+| Inference | Resize + centre crop, test-time augmentation (original + horizontal flip) |
+
+Note that training resizes images to 224 × 224 without keeping the aspect ratio, while inference keeps it and centre-crops. Together with test-time augmentation, this is why the accuracy with the app's inference pipeline (83.54%) differs slightly from the training-time validation accuracy (82.55%).
+
+## Dataset
+
+18 of the 20 classes of the Kaggle dataset [Indian Food Classification](https://www.kaggle.com/datasets/l33tc0d3r/indian-food-classification) (the classes chapati and dal_makhani were not used): burger, butter naan, chai, chole bhature, dhokla, fried rice, idli, jalebi, kaathi rolls, kadai paneer, kulfi, masala dosa, momos, paani puri, pakode, pav bhaji, pizza, samosa.
+
+![Images per class](distribution_chart.png)
+
+Classes range from 130 images (paani puri) to 412 (kadai paneer). The dataset is not included in this repository. The images in the dataset were collected from the web and their copyright is not documented; the five demo images in `static/demo_images/` are taken from the validation split.
+
+## Getting started
 
 ### Prerequisites
-- Python 3.9 or higher
-- Virtual environment (recommended)
-- Groq API key (optional, for GenAI features)
 
-### Installation Steps
+- Python 3.9 or later
+- Optional: a [Groq](https://console.groq.com) API key for the AI notes (without it, the static fallback text is shown)
 
-**1. Clone the repository**
+### Installation
+
 ```bash
-git clone <repository-url>
-cd "NutriVision AI"
-```
-
-**2. Create and activate virtual environment**
-```bash
+git clone https://github.com/samu2421/NutriVisionAI.git
+cd NutriVisionAI
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-**3. Install dependencies**
-```bash
+source venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env        # optional: add your GROQ_API_KEY
 ```
 
-**4. Set up environment variables** (optional)
+### Download the trained model
 
-Create a `.env` file in the project root:
+The trained weights (about 26 MB) are attached to the latest [release](https://github.com/samu2421/NutriVisionAI/releases):
+
 ```bash
-GROQ_API_KEY=your_groq_api_key_here
+curl -L -o models/efficientnet_b1_indian.pth \
+  https://github.com/samu2421/NutriVisionAI/releases/latest/download/efficientnet_b1_indian.pth
 ```
 
-> **Note:** The application works without the API key, but GenAI features (cultural explanations, recipe ideas, AI insights) will use fallback static content.
+### Run
 
-**5. Run the Flask application**
 ```bash
 python app.py
 ```
 
-**6. Access the application**
+Open http://127.0.0.1:5001. The demo page (`/demo`) works without uploading an image.
 
-Open your browser and navigate to:
-```
-http://127.0.0.1:5001
-```
+### Reproduce training and evaluation
 
----
+Download the Kaggle dataset, place one folder per class in `data/raw/`, then:
 
-## 📂 Project Directory Tree
-
-```
-NutriVision AI/
-├── app.py                          # Flask application entry point
-├── requirements.txt                # Python dependencies
-├── .env                           # Environment variables (create manually)
-├── README.md                      # Project documentation
-│
-├── src/                           # Source code modules
-│   ├── __init__.py               # Package initializer
-│   ├── train.py                  # Model training script
-│   ├── predict.py                # Inference engine with TTA
-│   ├── utils.py                  # Data utilities & FoodDataManager
-│   ├── genai_helper.py           # Groq API integration
-│   ├── demo_config.py            # Demo mode configuration
-│   └── evaluate_model.py         # Offline evaluation metrics
-│
-├── models/                        # Model storage
-│   ├── efficientnet_b1_indian.pth  # Trained model (26 MB)
-│   └── checkpoints/              # Training checkpoints
-│
-├── data/                          # Data storage
-│   ├── food_data.json            # Nutrition database (18 foods)
-│   ├── raw/                      # Raw dataset (18 class folders)
-│   └── processed/                # Train/val splits (auto-generated)
-│
-├── static/                        # Static assets
-│   ├── uploads/                  # User-uploaded images
-│   ├── demo_images/              # Demo food images
-│   ├── css/                      # Bootstrap 5 styles
-│   ├── js/                       # JavaScript libraries
-│   ├── lib/                      # Third-party libraries
-│   └── img/                      # Template images
-│
-└── templates/                     # Jinja2 HTML templates
-    ├── base.html                 # Base layout
-    ├── index.html                # Home page
-    ├── scan.html                 # Upload interface
-    ├── results.html              # Results page (4 tabs)
-    ├── debug.html                # System debug page
-    ├── 404.html                  # Error page
-    └── 500.html                  # Server error page
+```bash
+python -m src.train            # creates the 80/20 split in data/processed/ and trains
+python -m src.evaluate_model   # writes evaluation_results.json
+python scripts/export_checkpoint_metrics.py   # writes results/checkpoint_val_accuracy.json
 ```
 
----
+`visualizations.ipynb` recreates the three charts from those files and the processed dataset.
 
-## 🧩 Features
-
-### Core Vision Intelligence
-- **Deep Learning Classification**: EfficientNet-B1 model trained on 18 Indian food classes
-- **Test Time Augmentation (TTA)**: Logit averaging across original and horizontally flipped images for improved confidence
-- **ImageNet Preprocessing**: Standard SmallestMaxSize(256) + CenterCrop(224) pipeline to reduce aspect ratio distortion
-- **Confidence Calibration**: Honest uncertainty communication with domain shift awareness
-
-### Generative Intelligence
-- **Cultural Explanations**: AI-generated context about food origins, Ayurvedic properties, and regional significance
-- **Leftover Ideas**: Creative suggestions for repurposing leftovers
-- **Flavor Pairing**: Recommended beverage and side dish pairings
-- **AI Insights**: Structured 3-bullet summaries grounded in nutrition data
-
-### Analytical Intelligence
-- **Nutrition Breakdown**: Calories, protein, carbs, fats, fiber per serving
-- **Portion Simulator**: Dynamic scaling (0.5× to 3.0×) with real-time updates
-- **Macro Radar Chart**: Interactive Chart.js visualization comparing meal to ideal balanced ratios
-- **Burn-Off Calculator**: Running minutes, cycling minutes, and Surya Namaskar rounds
-
-### Sustainability Intelligence
-- **Eco-Score**: 1-10 rating based on carbon footprint, water usage, and food miles
-- **Eco-Badge**: Color-coded visual indicator (green/yellow/red)
-- **Sustainability Explanations**: AI-generated insights on environmental impact
-
-### User Experience
-- **4-Tab Interface**: Overview, Nutrition Lab, Chef's Kitchen, Eco-Impact
-- **Human-in-the-Loop (HITL)**: Manual correction dropdown for mispredictions
-- **Compare Mode**: Side-by-side comparison of two foods
-- **Demo Mode**: Test without trained model using 5 pre-loaded examples
-- **Responsive Design**: Bootstrap 5 with mobile-first approach
-
----
-
-## 📊 Model Evaluation & Performance
-
-The EfficientNet-B1 classifier was evaluated on a held-out validation set containing real-world images across all 18 supported food classes. The model achieved a **Top-1 accuracy of 83.54%** and a **Top-3 accuracy of 93.26%**, indicating strong recognition performance while maintaining robustness on visually ambiguous samples.
-
-Macro-averaged metrics show balanced behavior across classes, with a **precision of 0.84**, **recall of 0.83**, and an **F1-score of 0.83**, avoiding bias toward dominant food categories. Confidence analysis further indicates that the model is well-calibrated, with an average prediction confidence of **0.76 ± 0.24**, suggesting appropriate uncertainty handling on out-of-distribution or low-quality inputs.
-
-These results demonstrate that the system achieves reliable real-time performance suitable for interactive food analysis, while transparently communicating uncertainty to support human-in-the-loop correction when needed.
-
----
-
-## 🔧 Limitations
-
-### Model Constraints
-- **Limited Food Classes**: Only 18 Indian food items supported (see list below)
-- **Domain Shift**: Model trained on curated dataset; real-world Google images may have lower confidence (40-60% → 75-90% after TTA)
-- **Single Food Detection**: Cannot handle multiple foods in one image
-- **No Portion Estimation**: Assumes standard serving size; user must manually adjust portion multiplier
-
-### Environmental Requirements
-- **Lighting Sensitivity**: Low light or extreme shadows reduce confidence
-- **Angle Dependency**: Top-down or 45° angles work best; side views may fail
-- **Background Noise**: Cluttered backgrounds can confuse the model
-
-### GenAI Dependencies
-- **Internet Required**: Groq API calls need active internet connection
-- **API Key Required**: GenAI features disabled without valid GROQ_API_KEY
-- **Rate Limits**: Free tier has request limits; may fallback to static content
-
----
-
-## 🖼️ Architecture Diagram
+## Repository structure
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          USER (Web Browser)                              │
-└────────────────────────────────┬────────────────────────────────────────┘
-                                 │
-                                 │ Uploads Image
-                                 ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                       FLASK APP (Controller)                             │
-│                         app.py (Port 5001)                               │
-└──────┬──────────────────────┬──────────────────────┬────────────────────┘
-       │                      │                      │
-       │ 1. Preprocess        │ 2. Get Nutrition     │ 3. Get GenAI
-       ▼                      ▼                      ▼
-┌──────────────┐      ┌──────────────┐      ┌──────────────┐
-│ Preprocessing│      │  JSON DB     │      │  Groq API    │
-│  (Resize +   │      │ food_data.   │      │  (LLaMA-3.1  │
-│  Normalize)  │      │  json        │      │   70b)       │
-└──────┬───────┘      └──────┬───────┘      └──────┬───────┘
-       │                     │                     │
-       │ 224×224 RGB         │ Calories, Macros    │ Cultural Context
-       ▼                     │ Burn-off, Eco       │ Recipe Ideas
-┌──────────────┐             │                     │
-│ EfficientNet │             │                     │
-│     B1       │             │                     │
-│  (PyTorch)   │             │                     │
-└──────┬───────┘             │                     │
-       │                     │                     │
-       │ Class ID            │                     │
-       │ (e.g., "samosa")    │                     │
-       └─────────┬───────────┴─────────────────────┘
-                 │
-                 │ Combine Results
-                 ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    JINJA2 TEMPLATE ENGINE                                │
-│                  (Render HTML with Data)                                 │
-└────────────────────────────────┬────────────────────────────────────────┘
-                                 │
-                                 │ HTML + CSS + JS
-                                 ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    USER SCREEN (Bootstrap 5 UI)                          │
-│  ┌─────────────┬─────────────┬─────────────┬─────────────┐             │
-│  │  Overview   │ Nutrition   │   Chef's    │ Eco-Impact  │             │
-│  │     Tab     │  Lab Tab    │  Kitchen    │     Tab     │             │
-│  └─────────────┴─────────────┴─────────────┴─────────────┘             │
-└─────────────────────────────────────────────────────────────────────────┘
+app.py                      Flask routes (upload, results, portion updates, correction, demo)
+src/
+  train.py                  Data split, training loop, checkpoints
+  evaluate_model.py         Metrics and confusion matrix on the validation set
+  predict.py                Inference with test-time augmentation
+  genai_helper.py           Groq API calls with logging and fallbacks
+  utils.py                  Nutrition data access, burn-off and eco score
+  demo_config.py            Precomputed predictions for the demo page
+data/food_data.json         Nutrition and food information for the 18 classes
+templates/, static/         Jinja2 pages, CSS, JavaScript, demo images
+scripts/                    Checkpoint metric export
+results/                    Checkpoint validation accuracies (JSON)
+visualizations.ipynb        Charts for this README
+evaluation_results.json     Evaluation output
 ```
 
-**System follows a Model-View-Controller (MVC) pattern adaptation:**
-- **Model**: EfficientNet-B1 (Deep Learning Logic) + FoodDataManager (Data Logic)
-- **View**: Jinja2 Templates + Bootstrap 5 (Frontend Presentation)
-- **Controller**: Flask Routes (app.py) mediating between Model and View
+## Limitations
 
-This ensures modularity; the model can be swapped (e.g., EfficientNet-B1 → ResNet50) without breaking the UI, and the UI can be redesigned without touching the ML pipeline.
+- One dish per photo; mixed plates are not supported.
+- Portion size is not estimated from the image; the user sets it with the slider.
+- Nutrition values are per standard serving from a manually compiled table, not measured.
+- Accuracy is measured on images from the same web-collected dataset. Photos taken in other conditions (lighting, angle, clutter) are likely to score lower.
+- No separate test set (see Results).
+- The AI notes depend on an external API and model availability.
 
----
+## Possible next steps
 
-## ⚡ Usage Notes
+- Hold out a separate test set and fine-tune the last backbone blocks
+- Use the same preprocessing for training and inference
+- Multi-dish detection and visual portion estimation
+- Containerise the app
 
-### How to Upload Images
-1. Navigate to **Scan Food** page (`/scan`)
-2. Click **"Choose File"** or drag-and-drop an image
-3. Supported formats: JPG, JPEG, PNG
-4. Click **"Analyze Food"** to submit
+## Credits
 
-### Understanding the 4 Tabs
+- Front-end template: [Restoran](https://htmlcodex.com) by HTML Codex (credit kept in the site footer)
+- Dataset: [Indian Food Classification](https://www.kaggle.com/datasets/l33tc0d3r/indian-food-classification) on Kaggle
+- Libraries: PyTorch, torchvision, Albumentations, Flask, Bootstrap, Chart.js, animate.css, WOW.js
 
-**1. Overview Tab**
-- Quick stats: Calories, Eco Score, Protein
-- Burn-Off Activities card (running, cycling, yoga)
-- Portion slider (0.5× to 3.0×)
-- Time-aware contextual intelligence (breakfast/lunch/dinner suggestions)
+## Author
 
-**2. Nutrition Lab Tab**
-- Detailed nutrition table with % Daily Value
-- Interactive macro radar chart (protein, carbs, fats)
-- Macro sliders for "what-if" analysis
-- Portion scaling controls
-
-**3. Chef's Kitchen Tab**
-- Cultural explanation (Ayurvedic properties, regional origins)
-- Leftover ideas (creative repurposing suggestions)
-- Flavor pairing (beverage and side dish recommendations)
-- AI insights (3-bullet summary)
-
-**4. Eco-Impact Tab**
-- Sustainability score (1-10)
-- Carbon footprint, water usage, food miles
-- Eco-badge (green/yellow/red)
-- AI-generated sustainability explanations
-
-### Interpreting Confidence Scores
-
-- **≥ 80%**: High confidence (green badge) - prediction is reliable
-- **60-79%**: Medium confidence (yellow badge) - prediction is likely correct
-- **< 60%**: Low confidence (red badge) - use HITL correction dropdown
-
-**Why low confidence?**
-- Domain shift: Real-world images differ from training data
-- Poor lighting or extreme angles
-- Cluttered background or multiple foods
-- Food not in 18 supported classes
-
-### Interactive Features
-
-- **Portion Slider**: Drag to adjust serving size; all values update in real-time
-- **Compare Mode**: Click "Scan Another Food" to compare two foods side-by-side
-- **HITL Correction**: If prediction is wrong, select correct food from dropdown
-- **Eco-Badge Animation**: Hover over badge for tooltip with sustainability details
-
----
-
-## 🍛 Supported Foods (18 Classes)
-
-1. **Samosa** - Triangular fried pastry with potato filling
-2. **Idli** - Steamed rice cake (South Indian)
-3. **Masala Dosa** - Crispy rice crepe with spiced potato filling
-4. **Chole Bhature** - Spiced chickpeas with fried bread
-5. **Pav Bhaji** - Spiced vegetable mash with bread rolls
-6. **Paani Puri** - Crispy hollow puri with spiced water
-7. **Butter Naan** - Leavened flatbread with butter
-8. **Kadai Paneer** - Cottage cheese in spicy tomato gravy
-9. **Dhokla** - Steamed fermented rice cake (Gujarati)
-10. **Pakode** - Deep-fried fritters
-11. **Momos** - Steamed dumplings (Tibetan-Indian)
-12. **Kaathi Rolls** - Wrap with spiced filling
-13. **Fried Rice** - Stir-fried rice with vegetables
-14. **Jalebi** - Deep-fried sweet pretzel
-15. **Kulfi** - Traditional Indian ice cream
-16. **Chai** - Spiced milk tea
-17. **Burger** - Western fast food (Indian adaptation)
-18. **Pizza** - Italian dish (Indian adaptation)
-
----
-
-## 📜 Attribution & Credits
-
-### Frontend Template
-- **Restoran Bootstrap Template** by [HTML Codex](https://htmlcodex.com/)
-- Licensed under: Free to use with attribution
-
-### Dataset
-- **Indian Food 101 Dataset** (subset of 18 classes)
-- Source: Kaggle + custom collection
-- Total images: ~3,600 (200 per class)
-
-### Libraries & Frameworks
-
-**Deep Learning:**
-- PyTorch 2.0+ (Model training and inference)
-- torchvision (Pretrained EfficientNet-B1)
-- Albumentations (Image augmentation)
-
-**Web Framework:**
-- Flask 2.3+ (Backend server)
-- Jinja2 (Template engine)
-- Flask-CORS (Cross-origin requests)
-
-**Frontend:**
-- Bootstrap 5 (CSS framework)
-- Chart.js 4.4.0 (Radar chart visualization)
-- Font Awesome (Icons)
-- WOW.js (Scroll animations)
-
-**GenAI:**
-- Groq API (LLaMA-3.1-70b-versatile)
-- python-dotenv (Environment variables)
-
-**Image Processing:**
-- Pillow 9.5+ (Image I/O)
-- OpenCV 4.7+ (Image manipulation)
-
-**Data Science:**
-- NumPy 1.24+ (Numerical operations)
-- pandas 2.0+ (Data manipulation)
-- scikit-learn 1.2+ (Metrics and evaluation)
-
----
-
-## 💡 Optional Improvements
-
-### Deployment
-- **Cloud Hosting**: Deploy to AWS EC2, Google Cloud Run, or Heroku
-- **Containerization**: Create Dockerfile for reproducible deployment
-- **HTTPS**: Add SSL certificate for secure connections
-- **CDN**: Use Cloudflare or AWS CloudFront for static assets
-
-### Feature Enhancements
-- **User Accounts**: Add authentication and save food history
-- **Barcode Scanner**: Integrate barcode reading for packaged foods
-- **Multi-Food Detection**: Use object detection (YOLO) to handle multiple foods
-- **Portion Estimation**: Use depth estimation or reference objects for automatic portion sizing
-- **Meal Planning**: Suggest balanced meal combinations
-- **Export Reports**: Generate PDF nutrition reports
-
-### Model Improvements
-- **Expand Classes**: Train on 50+ Indian food items
-- **Fine-Grained Classification**: Distinguish between variations (e.g., plain dosa vs masala dosa)
-- **Transfer Learning**: Use Vision Transformers (ViT) or ConvNeXt for better accuracy
-- **Active Learning**: Collect user corrections to improve model over time
-
-### Data Enhancements
-- **Real-Time Nutrition API**: Integrate USDA FoodData Central or Nutritionix API
-- **Regional Variations**: Add nutrition data for different regional preparations
-- **Allergen Detection**: Flag common allergens (gluten, dairy, nuts)
-
----
-
-## 👨‍💻 Author
-
-**MSc ADSA Final Project**  
-Data Analytics 3 - 3rd Semester  
-December 2025
-
----
-
-## 📄 License
-
-**Educational Use Only**
-
-This project is developed for academic purposes as part of a university final project. The code is provided as-is for educational reference.
-
-**Third-Party Licenses:**
-- Bootstrap 5: MIT License
-- Chart.js: MIT License
-- PyTorch: BSD License
-- Flask: BSD License
-
----
-
-## 🙏 Acknowledgments
-
-Special thanks to:
-- **HTML Codex** for the Restoran Bootstrap template
-- **Kaggle community** for the Indian Food dataset
-- **Groq** for providing free API access to LLaMA models
-- **PyTorch team** for the excellent deep learning framework
-- **University faculty** for guidance and support
-
----
-
-**⭐ If you find this project useful, please consider giving it a star on GitHub!**
+Samiksha Dhere — individual project.
